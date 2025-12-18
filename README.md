@@ -126,6 +126,7 @@ make demo
 
 <br />
 
+<div align="center">
 
 ### Connect with us
 
