@@ -1,0 +1,107 @@
+# endpoints.yml
+# This file configures external services that Rasa connects to
+
+# ==============================================================================
+# Action Server
+# ==============================================================================
+# The action server runs your custom Python actions
+action_endpoint:
+  url: "http://localhost:5055/webhook"
+  # Optional: Add authentication token
+  # token: "your-secret-token"
+
+# ==============================================================================
+# Tracing (Optional - for debugging and monitoring)
+# ==============================================================================
+# Distributed tracing helps you understand how requests flow through your assistant
+# Uncomment one of the following configurations to enable tracing
+
+# Option 1: Jaeger Backend (recommended for local development)
+tracing:
+  type: jaeger
+  host: localhost
+  port: 4317
+  service_name: voice-assistant
+  sync_export: false
+
+# Option 2: OpenTelemetry Collector (OTLP) - for production
+# tracing:
+#   type: otlp
+#   endpoint: my-otlp-host:4317
+#   insecure: false  # Set to true for local development without TLS
+#   service_name: voice-assistant
+#   # Optional: Path to TLS certificate
+#   # root_certificates: ./path/to/ca.pem
+
+# ==============================================================================
+# Silence Handling for Voice
+# ==============================================================================
+# Controls how long to wait for user input before timing out
+interaction_handling:
+  global_silence_timeout: 7  # seconds to wait before timeout
+  # Optional: Configure per-channel silence timeouts
+  # channels:
+  #   rest:
+  #     silence_timeout: 10
+
+# ==============================================================================
+# Event Broker (Optional - for scaling)
+# ==============================================================================
+# Used to stream events to external systems (e.g., Kafka, RabbitMQ)
+# Uncomment and configure if you need event streaming
+
+# event_broker:
+#   type: sql
+#   dialect: postgresql
+#   host: localhost
+#   port: 5432
+#   username: rasa
+#   password: password
+#   db: rasa_events
+
+# ==============================================================================
+# Tracker Store (Optional - for conversation persistence)
+# ==============================================================================
+# By default, conversations are stored in-memory and lost on restart
+# Configure a persistent tracker store for production
+
+# tracker_store:
+#   type: sql
+#   dialect: postgresql
+#   host: localhost
+#   port: 5432
+#   username: rasa
+#   password: password
+#   db: rasa_tracker
+
+# ==============================================================================
+# Lock Store (Optional - for distributed deployments)
+# ==============================================================================
+# Prevents race conditions when multiple Rasa instances handle the same conversation
+# Required for multi-instance deployments
+
+# lock_store:
+#   type: redis
+#   host: localhost
+#   port: 6379
+#   password: password
+#   db: 0
+
+# ==============================================================================
+# Model Storage (Optional - for model versioning)
+# ==============================================================================
+# Store trained models in external storage (e.g., AWS S3, Azure Blob)
+
+# model_endpoint:
+#   type: s3
+#   bucket: my-rasa-models
+#   region: us-east-1
+#   # AWS credentials configured via environment variables or IAM role
+
+# ==============================================================================
+# NLG Server (Optional - for external response generation)
+# ==============================================================================
+# Use an external service to generate bot responses
+
+# nlg:
+#   url: "http://localhost:5055/nlg"

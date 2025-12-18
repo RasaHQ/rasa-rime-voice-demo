@@ -1,0 +1,30 @@
+# pyproject.toml
+[project]
+name = "rasa-rime-voice-demo"
+version = "1.0.0"
+description = "Real-time Voice Orchestration with Rasa, Rime, and Deepgram"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    "rasa-pro>=3.9.0",
+    "rasa-sdk>=3.8.0",
+    "openai>=1.0.0",
+    "aiohttp>=3.9.0",
+    "pydub>=0.25.1",
+    "simpleaudio>=1.0.4",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "spacy>=3.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+# --- THE FIX IS HERE ---
+[tool.setuptools]
+# We explicitly tell setuptools that 'actions' is the only Python package here.
+# This prevents it from trying to compile 'data' or 'conversations' as code.
+packages = ["actions"]
+
+[tool.uv]
+# This ensures uv manages the venv correctly

@@ -1,0 +1,104 @@
+# data/flows.yml
+
+flows:
+  # Welcome and Help
+  welcome:
+    description: Greet the user and offer assistance
+    steps:
+      - action: utter_greet
+      - action: utter_help
+
+  # Check Balance
+  check_balance:
+    description: Check account balance for checking or savings account
+    steps:
+      - collect: account_type
+        description: "checking or savings account"
+        rejections:
+          - if: slots.account_type != "checking" and slots.account_type != "savings"
+            utter: utter_ask_account_type
+      - action: action_get_account_balance
+      - action: utter_provide_balance
+      - set_slots:
+          - account_type: null  # Reset so it can be asked again
+      - action: utter_can_do_something_else
+
+  # Transfer Money
+  transfer_money:
+    description: Transfer money between user's accounts
+    steps:
+      - collect: transfer_from_account
+        description: "source account - checking or savings"
+      - collect: transfer_to_account
+        description: "destination account - checking or savings"
+      - collect: transfer_amount
+        description: "amount in dollars to transfer"
+      - collect: transfer_confirmation
+        description: "user confirms the transfer"
+        ask_before_filling: true
+        next:
+          - if: not slots.transfer_confirmation
+            then:
+              - action: utter_transfer_cancelled
+              - set_slots:
+                  - transfer_from_account: null
+                  - transfer_to_account: null
+                  - transfer_amount: null
+                  - transfer_confirmation: null
+                next: END
+          - else: process_transfer
+      - id: process_transfer
+        action: action_process_transfer
+      - action: utter_transfer_complete
+      - set_slots:
+          - transfer_from_account: null
+          - transfer_to_account: null
+          - transfer_amount: null
+          - transfer_confirmation: null
+      - action: utter_can_do_something_else
+
+  # Report Lost Card
+  report_lost_card:
+    description: Report a lost or stolen credit or debit card and block it
+    steps:
+      - action: utter_card_loss_acknowledge
+      - collect: card_last_four
+        description: "last four digits of the card (accepts digits with or without spaces)"
+        rejections:
+          # Accept 4 digits with optional spaces: "4532" or "4 5 3 2" or "45 32"
+          - if: not (slots.card_last_four matches "^\d[\s]?\d[\s]?\d[\s]?\d$")
+            utter: utter_ask_card_last_four
+      - action: action_block_card
+        next:
+          - if: slots.card_blocked
+            then:
+              - action: utter_card_blocked
+                next: after_card_action
+          - else:
+              - action: utter_card_block_failed
+                next: after_card_action
+      - id: after_card_action
+        set_slots:
+          - card_last_four: null
+          - card_blocked: null
+      - action: utter_can_do_something_else
+
+  # Transaction History
+  transaction_history:
+    description: Show recent account transactions
+    steps:
+      - action: action_get_transactions
+      - action: utter_show_transactions
+      - action: utter_can_do_something_else
+
+  # Help
+  help:
+    description: Explain what the assistant can do
+    steps:
+      - action: utter_help
+
+  # Goodbye
+  goodbye:
+    description: End the conversation politely
+    steps:
+      - action: utter_goodbye

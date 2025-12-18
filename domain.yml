@@ -1,0 +1,131 @@
+# domain.yml
+version: "3.1"
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true
+
+slots:
+  # Account information
+  account_type:
+    type: text
+    mappings:
+      - type: from_llm
+
+  transfer_from_account:
+    type: text
+    mappings:
+      - type: from_llm
+
+  transfer_to_account:
+    type: text
+    mappings:
+      - type: from_llm
+
+  transfer_amount:
+    type: text
+    mappings:
+      - type: from_llm
+
+  transfer_confirmation:
+    type: bool
+    mappings:
+      - type: from_llm
+
+  # Balance information
+  account_balance:
+    type: text
+    mappings:
+      - type: controlled
+
+  # Card information
+  card_last_four:
+    type: text
+    mappings:
+      - type: from_llm
+
+  card_blocked:
+    type: bool
+    mappings:
+      - type: controlled
+
+  # Available accounts
+  available_accounts:
+    type: text
+    mappings:
+      - type: controlled
+
+responses:
+  # Greetings
+  utter_greet:
+    - text: "Hello! I'm your voice banking assistant. How can I help you today?"
+
+  utter_goodbye:
+    - text: "Thank you for calling. Have a great day!"
+
+  # Balance Check Flow
+  utter_ask_account_type:
+    - text: "Which account would you like to check? Checking or savings?"
+
+  utter_provide_balance:
+    - text: "Your {account_type} account has a balance of {account_balance}."
+
+  # Transfer Money Flow
+  utter_ask_transfer_from_account:
+    - text: "Which account would you like to transfer from?"
+
+  utter_ask_transfer_to_account:
+    - text: "Which account should I transfer to?"
+
+  utter_ask_transfer_amount:
+    - text: "How much would you like to transfer?"
+
+  utter_ask_transfer_confirmation:
+    - text: "Transferring {transfer_amount} from {transfer_from_account} to {transfer_to_account}. Is that correct?"
+
+  utter_transfer_complete:
+    - text: "Done. {transfer_amount} has been transferred from your {transfer_from_account} to your {transfer_to_account}."
+
+  utter_transfer_cancelled:
+    - text: "Transfer cancelled. Is there anything else I can help with?"
+
+  # Lost Card Flow
+  utter_card_loss_acknowledge:
+    - text: "I'm sorry to hear that. I'll help you block your card right away."
+
+  utter_ask_card_last_four:
+    - text: "For security, what are the last four digits of your card?"
+
+  utter_card_blocked:
+    - text: "Your card ending in {card_last_four} has been blocked. A replacement will be sent in five to seven business days."
+
+  utter_card_block_failed:
+    - text: "I wasn't able to block that card. Please try again or contact customer service."
+
+  # Transaction History
+  utter_show_transactions:
+    - text: "Here are your recent transactions. December first, Grocery Store, seventy-five dollars. December second, Gas Station, forty dollars. December third, Restaurant, sixty dollars."
+
+  # Error Messages
+  utter_default:
+    - text: "I didn't understand that. Could you try rephrasing?"
+
+  utter_did_not_catch:
+    - text: "Sorry, I didn't catch that. Could you repeat?"
+
+  utter_ask_rephrase:
+    - text: "I'm having trouble understanding. Could you say that differently?"
+
+  # Help
+  utter_help:
+    - text: "I can help you check your balance, transfer money, report a lost card, or view recent transactions. What would you like to do?"
+
+  utter_can_do_something_else:
+    - text: "Is there anything else I can help you with?"
+
+actions:
+  - action_get_account_balance
+  - action_get_accounts
+  - action_process_transfer
+  - action_block_card
+  - action_get_transactions

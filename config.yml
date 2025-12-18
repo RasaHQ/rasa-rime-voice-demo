@@ -1,0 +1,17 @@
+# config.yml
+recipe: default.v1
+language: en
+
+assistant_id: voice_banking_assistant
+
+pipeline:
+  - name: CompactLLMCommandGenerator
+    llm:
+      provider: openai
+      model: gpt-4o-2024-11-20
+      temperature: 0.1
+      max_tokens: 256
+      timeout: 10
+
+policies:
+  - name: FlowPolicy
