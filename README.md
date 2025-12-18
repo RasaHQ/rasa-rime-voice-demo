@@ -120,34 +120,17 @@ make demo
 ## 🚀 Two Ways to Get Started with Rasa
 
 | **🤖 Start Building** | **🧠 Join the Conversation** |
-| --- | --- |
-| **[Try Hello Rasa](https://www.google.com/url?sa=E&source=gmail&q=https://hello.rasa.ai/?utm_source=github%26utm_medium=website%26utm_campaign=unwrap_voice)** | **[Agent Engineering Community](https://www.google.com/url?sa=E&source=gmail&q=https://info.rasa.com/community?utm_source=github%26utm_medium=website%26utm_campaign=unwrap_voice)** |
-| The fastest way to prototype. An interactive playground to build **CALM** agents in your browser.<br>
-
-<br>
-
-<br>✨ **No setup required**<br>
-
-<br>✨ **No NLU training needed**<br>
-
-<br>✨ **Built-in Copilot** | The home for people building real-world AI agents. A vendor-neutral space to discuss architectures, memory, and orchestration.<br>
-
-<br>
-
-<br>🤝 **Meet other builders**<br>
-
-<br>🛠️ **Share agent patterns**<br>
-
-<br>🎓 **Learn from the best** |
+| :--- | :--- |
+| **[Try Hello Rasa](https://hello.rasa.ai/?utm_source=github&utm_medium=website&utm_campaign=)** | **[Agent Engineering Community](https://info.rasa.com/community?utm_source=github&utm_medium=website&utm_campaign=)** |
+| The fastest way to prototype. An interactive playground to build **CALM** (Conversational AI with Language Models) agents in your browser.<br><br>✨ **No setup required**<br>✨ **No NLU training needed**<br>✨ **Built-in Copilot** | The home for people building real-world AI agents. A vendor-neutral space to discuss architectures, memory, and orchestration.<br><br>🤝 **Meet other builders**<br>🛠️ **Share agent patterns**<br>🎓 **Learn form the best** |
 
 <br />
 
-<div align="center">
 
 ### Connect with us
 
 [<img src="https://img.shields.io/badge/YouTube-Rasa-red?style=flat-square&logo=youtube" width="100"/>](https://www.google.com/search?q=https://www.youtube.com/%40RasaHQ%3Futm_campaign%3Dunwrap_voice%26utm_source%3Dgithub)
 [<img src="https://img.shields.io/badge/LinkedIn-Rasa-blue?style=flat-square&logo=linkedin" width="100"/>](https://www.google.com/search?q=https://www.linkedin.com/company/rasa/%3Futm_campaign%3Dunwrap_voice%26utm_source%3Dgithub)
 [<img src="https://img.shields.io/badge/Forum-Rasa_Community-brightgreen?style=flat-square&logo=discourse" width="130"/>](https://www.google.com/search?q=https://forum.rasa.com/%3Futm_campaign%3Dunwrap_voice%26utm_source%3Dgithub)
-
+[<img src="https://img.shields.io/badge/Events-Upcoming-orange?style=flat-square&logo=eventbrite" width="100"/>](https://rasa.com/rasa-events/%3Futm_campaign%3Dunwrap_voice%26utm_source%3Dgithub)
 </div>
