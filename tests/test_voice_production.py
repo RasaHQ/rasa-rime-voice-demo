@@ -1,4 +1,12 @@
-# tests/test_voice_production.py
+# === QV-LLM:BEGIN ===
+# path: tests/test_voice_production.py
+# role: module
+# neighbors: test_voice_full_pipeline.py
+# exports: Colors
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 #!/usr/bin/env python3
 """
 Production Voice Testing with Real ASR/TTS

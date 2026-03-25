@@ -93,3 +93,75 @@ clean: ## Clean up temporary files
 	rm -rf .rasa models results tests/audio_responses
 	find . -name "*.pyc" -delete
 	find . -name "__pycache__" -delete
+
+# --- Annotate---
+
+ANNOTATE_SCOPE ?= .
+ANNOTATE_EXT ?= .py,.yaml,.yml,.toml,.env
+ANNOTATE_MAX_NEIGHBORS ?= 6
+
+.PHONY: annotate
+annotate: ## Add/update QV-LLM header blocks across common repo files
+	@$(PYTHON) scripts/annotate_headers.py \
+		--scope "$(ANNOTATE_SCOPE)" \
+		--extensions "$(ANNOTATE_EXT)" \
+		--max-neighbors "$(ANNOTATE_MAX_NEIGHBORS)" \
+		--remove-legacy-path-line
+
+# --- Flatten defaults (override on CLI) ---
+FLATTEN_OUT ?= _transient-files/flatten
+FLATTEN_EXT ?= .py,.yaml,.yml,.toml,.env,.example,.md
+FLATTEN_SKIP ?= .git,.venv,__pycache__,.mypy_cache,.pytest_cache,.ruff_cache,build,dist,.egg-info,node_modules
+
+# Default to repo root; override with: make flatten SCOPE=quack-core/src/quack_core/lib/fs
+FLATTEN_SCOPE ?= .
+
+# Cap output to keep it shareable; override with: make flatten MAX_BYTES=8000000
+MAX_BYTES ?= 4000000
+MAX_FILES ?=
+
+.PHONY: flatten-scope
+flatten-scope: ## Flatten a specific directory: make flatten-scope SCOPE=quack-core/src/quack_core/lib/fs
+	@test -n "$(SCOPE)" || (echo "Usage: make flatten-scope SCOPE=path/to/dir" && exit 1)
+	@$(PYTHON) scripts/flatten.py \
+		--mode scope \
+		--scope "$(SCOPE)" \
+		--out-dir "$(FLATTEN_OUT)" \
+		--extensions "$(FLATTEN_EXT)" \
+		--skip-dirs "$(FLATTEN_SKIP)" \
+		--exclude "flat.txt" \
+		--exclude "_transient-files/**" \
+		--max-bytes 4000000
+
+.PHONY: flatten-tree
+flatten-tree: ## Flatten one file per subdir: make flatten-tree SCOPE=quack-core/src/quack_core/lib/fs
+	@test -n "$(SCOPE)" || (echo "Usage: make flatten-tree SCOPE=path/to/dir" && exit 1)
+	@$(PYTHON) scripts/flatten.py \
+		--mode tree \
+		--scope "$(SCOPE)" \
+		--out-dir "$(FLATTEN_OUT)" \
+		--extensions "$(FLATTEN_EXT)" \
+		--skip-dirs "$(FLATTEN_SKIP)" \
+		--exclude "flat.txt" \
+		--exclude "_transient-files/**" \
+		--max-bytes 2500000
+
+.PHONY: flatten-clean
+flatten-clean: ## Remove transient flatten outputs
+	@rm -rf "$(FLATTEN_OUT)"
+
+.PHONY: flatten
+flatten: ## Flatten files using scripts/flatten.py (defaults to repo root). Override: make flatten SCOPE=path
+	@echo "${BLUE}Flattening '$(FLATTEN_SCOPE)' into $(FLATTEN_OUT) (max $(MAX_BYTES) bytes)...${RESET}"
+	@mkdir -p "$(FLATTEN_OUT)"
+	@$(PYTHON) scripts/flatten.py \
+		--mode scope \
+		--scope "$(FLATTEN_SCOPE)" \
+		--out-dir "$(FLATTEN_OUT)" \
+		--extensions "$(FLATTEN_EXT)" \
+		--skip-dirs "$(FLATTEN_SKIP)" \
+		--exclude "flat.txt" \
+		--exclude "_transient-files/**" \
+		$(if $(MAX_FILES),--max-files $(MAX_FILES),) \
+		$(if $(MAX_BYTES),--max-bytes $(MAX_BYTES),)
+	@echo "${GREEN}✓ Done. See: $(FLATTEN_OUT)/manifest.md${RESET}"

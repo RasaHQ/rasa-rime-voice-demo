@@ -1,4 +1,12 @@
-# tests/test_voice_full_pipeline.py
+# === QV-LLM:BEGIN ===
+# path: tests/test_voice_full_pipeline.py
+# role: module
+# neighbors: test_voice_production.py
+# exports: Colors, VoiceTestResult, audio_to_text_simple, text_to_audio_simple, print_result
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 #!/usr/bin/env python3
 """
 Automated Voice Testing - Full Pipeline

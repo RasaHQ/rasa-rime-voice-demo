@@ -1,4 +1,11 @@
-# demo_live.py
+# === QV-LLM:BEGIN ===
+# path: demo_live.py
+# role: module
+# exports: make_layout
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 import asyncio
 import os
 import io

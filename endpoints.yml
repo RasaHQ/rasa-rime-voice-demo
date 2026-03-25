@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: endpoints.yml
+# role: module
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 # endpoints.yml
 # This file configures external services that Rasa connects to
 

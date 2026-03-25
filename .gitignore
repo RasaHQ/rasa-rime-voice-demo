@@ -1,13 +1,74 @@
-# Byte-compiled / optimized / DLL files
+# macOS system files
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+# Linux system files
+*~
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[codz]
+*.py[cod]
 *$py.class
+*.pyo
+*.pyd
 
 # C extensions
 *.so
+*.dylib
+*.dll
 
-# Distribution / packaging
+# Compiled object files
+*.o
+*.obj
+*.a
+*.lib
+*.la
+*.lo
+
+# Compiled Python files
+*.pyc
+*.pyd
+*.pyo
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Poetry
+poetry.lock
+
+# Pipenv
+Pipfile.lock
+
+# pdm
+pdm.lock
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# Pyenv
+.python-version
+
+# PEP 582 (Used by PDM and Pyflow)
+__pypackages__/
+
+# Package distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -21,21 +82,16 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+setup.cfg
+setup.py
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
@@ -47,27 +103,33 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py.cover
+*.py,cover
 .hypothesis/
 .pytest_cache/
-cover/
+.coverage-reports/
+.coverage-summary/
 
 # Translations
 *.mo
 *.pot
 
-# Django stuff:
+# Django
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+media/
 
-# Flask stuff:
+# Flask
 instance/
 .webassets-cache
+flask_session/
 
-# Scrapy stuff:
+# Scrapy
 .scrapy
+
+# MkDocs
+/site
 
 # Sphinx documentation
 docs/_build/
@@ -76,133 +138,222 @@ docs/_build/
 .pybuilder/
 target/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-#poetry.toml
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
-
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-#pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
+# Type checking
 .mypy_cache/
+.pyre/
+.pytype/
 .dmypy.json
 dmypy.json
 
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
+# Linter logs
+ruff_cache/
+pylint-report.txt
+flake8-report.txt
 
 # Cython debug symbols
 cython_debug/
 
+# Profiling data
+.prof
+*.prof
+*.lprof
+
 # PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
+*.iml
+workspace.xml
+tasks.xml
+shelf/
+.vscode/
 
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
+# VS Code settings
+.vscode/
+*.code-workspace
+.history/
+.settings/
 
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+# JetBrains IDEs
+*.idea/
+*.iml
+*.ipr
+*.iws
 
-# Ruff stuff:
-.ruff_cache/
+# Spyder
+.spyderproject
+.spyproject
 
-# PyPI configuration file
-.pypirc
+# Rope project
+.ropeproject
 
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
+# Google API credentials
+config/client_secret.json
+config/credentials.json
 
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
+# User configuration files
+config/quackimages_config.yaml
+**/_transient-files/
+
+# Keep template files
+!config/quackimages_config.yaml.template
+
+# Security-sensitive files
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.der
+*.jks
+secrets/
+.envrc
+secrets.env
+.env.local
+*.env
+*.env.*
+
+# Logs and debugging files
+logs/
+*.log
+*.out
+*.err
+debug.log
+debug/
+*.bak
+
+# Temporary files
+tmp/
+temp/
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.orig
+*.rej
+*.pid
+*.lock
+*.log.*
+
+# AWS, GCP, and Azure credentials
+.aws/
+.gcloud/
+.azure/
+
+# Terraform state files
+*.tfstate
+*.tfstate.backup
+
+# Ansible
+*.retry
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+Dockerfile~
+
+# Kubernetes
+.kube/
+
+# Ignore backups or archives
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+*.bz2
+*.xz
+
+# Ignore mounted volumes
+mnt/
+volumes/
+
+# Ignore binary executables
+*.exe
+*.app
+*.bin
+*.msi
+*.bat
+*.cmd
+*.sh~
+
+# Ignore database files
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Ignore machine learning artifacts
+*.h5
+*.hdf5
+*.pkl
+*.joblib
+*.pb
+*.ckpt
+*.onnx
+model/
+models/
+checkpoints/
+weights/
+logs/
+tensorboard/
+
+# Ignore cloud function builds
+.functions/
+.cloudfunctions/
+.cloudignore
+
+# Ignore CI/CD artifacts
+.circleci/
+.github/
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+jenkinsfile
+.gitpod.yml
+vercel.json
+now.json
+
+# Ignore editor-specific files
+*.swp
+*.swo
+*.swn
+.viminfo
+.nfs*
+
+# Ignore node_modules (if using a frontend)
+node_modules/
+
+# Ignore yarn.lock and package-lock.json (optional)
+yarn.lock
+package-lock.json
+
+# Ignore npm and yarn caches
+.npm/
+.yarn/
+
+# Ignore temporary config
+*.conf.tmp
+
+# Ignore Rust artifacts (if using Rust bindings)
+target/
+Cargo.lock
+
+# Ignore Go build files
+*.mod
+*.sum
+*.exe
+*.test
+*.prof
+
+# Ignore system-specific files
+thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+**/_transient-files/
+
+/quack-core/output/
+/quack-core/path/

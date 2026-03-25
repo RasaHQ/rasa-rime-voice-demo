@@ -1,4 +1,11 @@
-# scripts/generate_user_audio.py
+# === QV-LLM:BEGIN ===
+# path: scripts/generate_user_audio.py
+# role: module
+# neighbors: annotate_headers.py, flatten.py
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 import asyncio
 import os
 import aiohttp

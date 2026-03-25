@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: tests/e2e_test_cases.yml
+# role: module
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 # tests/e2e_test_cases.yml
 test_cases:
   - test_case: check balance

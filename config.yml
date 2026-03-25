@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: config.yml
+# role: module
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 # config.yml
 recipe: default.v1
 language: en

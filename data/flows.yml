@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: data/flows.yml
+# role: module
+# git_branch: main
+# git_commit: 28e1d95
+# === QV-LLM:END ===
+
 # data/flows.yml
 
 flows:
