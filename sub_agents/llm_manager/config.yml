@@ -1,10 +1,3 @@
-# === QV-LLM:BEGIN ===
-# path: sub_agents/llm_manager/config.yml
-# role: module
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
 agent:
   name: llm_manager
   protocol: RASA
@@ -13,9 +6,17 @@ agent:
     Handles escalated calls from customers who requested to speak
     to a human manager. More conversational and flexible than the
     automated system — but has no structured guardrails.
+    This agent intentionally has no domain restrictions, making it
+    vulnerable to the attacks demonstrated in the Heist demo.
 
 configuration:
   module: sub_agents.llm_manager.manager_agent.LLMManagerAgent
   llm:
     model_group: nebius_llm
   timeout: 60
+
+# MCPOpenAgent requires a connections section.
+# We use no external MCP servers — the manager's tools are
+# defined directly in manager_agent.py as custom tool definitions.
+connections:
+  mcp_servers: []

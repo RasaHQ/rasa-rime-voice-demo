@@ -1,10 +1,3 @@
-# === QV-LLM:BEGIN ===
-# path: pyproject.toml
-# role: module
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
 # pyproject.toml
 [project]
 name = "rasa-rime-voice-demo"
@@ -15,9 +8,6 @@ dependencies = [
     # Rasa
     "rasa-pro>=3.9.0",
     "rasa-sdk>=3.8.0",
-
-    # LLM
-    "openai>=1.0.0",
 
     # Networking & async
     "aiohttp>=3.9.0",
@@ -46,9 +36,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-# Only 'actions' and 'services' are real Python packages here.
-# This prevents setuptools trying to compile 'data/' or 'conversations/'.
-packages = ["actions", "services"]
+# All Python packages in this project.
+# sub_agents is source code (Rasa sub agent modules), not data.
+packages = ["actions", "services", "agents", "scenario", "sub_agents", "sub_agents.llm_manager"]
 
 [tool.uv]
 # uv manages the virtualenv
@@ -66,4 +56,4 @@ addopts = ["-v", "--tb=short"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
-exclude = [".venv", "models", "__pycache__", ".rasa", "tests/audio"]
+exclude = [".venv", "models", "__pycache__", ".rasa", "tests/audio", "sub_agents"]

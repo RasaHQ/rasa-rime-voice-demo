@@ -33,16 +33,23 @@ help: ## Show this help message
 	@echo ''
 	@echo '$(YELLOW)First-time setup:$(RESET)'
 	@echo '  $(GREEN)make install$(RESET)          Install dependencies into .venv'
-	@echo '  $(GREEN)make generate-audio$(RESET)   Generate the user voice audio files (requires RIME_API_KEY)'
-	@echo '  $(GREEN)make train$(RESET)             Train the Rasa dialogue model'
+	@echo '  $(GREEN)make generate-audio$(RESET)   Generate the user voice audio files'
+	@echo '  $(GREEN)make train$(RESET)             Train the Rasa dialogue model (basic demo)'
+	@echo '  $(GREEN)make train-heist$(RESET)       Train with sub agents (heist demo)'
 	@echo ''
 	@echo '$(YELLOW)Diagnostics:$(RESET)'
 	@echo '  $(GREEN)make verify$(RESET)            Pre-flight check: API keys, services, audio files'
+	@echo '  $(GREEN)make verify-heist$(RESET)      Pre-flight check for heist demo components'
 	@echo ''
-	@echo '$(YELLOW)Run the demo (3 separate terminals):$(RESET)'
+	@echo '$(YELLOW)Basic Demo (3 terminals):$(RESET)'
 	@echo '  $(GREEN)make run-actions$(RESET)       Tab 1 — Start the Action Server'
-	@echo '  $(GREEN)make run-rasa$(RESET)           Tab 2 — Start the Rasa Agent'
-	@echo '  $(GREEN)make demo$(RESET)               Tab 3 — Run the Live Orchestrator'
+	@echo '  $(GREEN)make run-rasa$(RESET)          Tab 2 — Start Rasa (basic demo)'
+	@echo '  $(GREEN)make demo$(RESET)              Tab 3 — Run the basic voice demo'
+	@echo ''
+	@echo '$(YELLOW)Heist Demo (3 terminals):$(RESET)'
+	@echo '  $(GREEN)make run-actions$(RESET)       Tab 1 — Start the Action Server'
+	@echo '  $(GREEN)make run-rasa-heist$(RESET)    Tab 2 — Start Rasa with sub agents enabled'
+	@echo '  $(GREEN)make demo-heist$(RESET)        Tab 3 — Run The Heist security demo'
 	@echo ''
 	@echo '$(YELLOW)Development:$(RESET)'
 	@echo '  $(GREEN)make test$(RESET)              Run the test suite (unit + integration)'
@@ -79,11 +86,20 @@ generate-audio: ## Generate user voice audio files via Rime (requires RIME_API_K
 	$(PYTHON) generate_user_audio.py
 	@echo "$(GREEN)✓ Audio generation complete.$(RESET)"
 
+# ==============================================================================
+# 🏋️ Training
+# ==============================================================================
 .PHONY: train
-train: ## Train the Rasa CALM dialogue model
+train: ## Train the Rasa CALM dialogue model (basic demo — no sub agents)
 	@echo "$(BLUE)Training Rasa model...$(RESET)"
 	$(RASA) train
 	@echo "$(GREEN)✓ Training complete.$(RESET)"
+
+.PHONY: train-heist
+train-heist: ## Train Rasa with sub agents enabled (required for heist demo)
+	@echo "$(BLUE)Training Rasa model with sub agents...$(RESET)"
+	$(RASA) train --sub-agents sub_agents
+	@echo "$(GREEN)✓ Training complete (sub agents included).$(RESET)"
 
 # ==============================================================================
 # 🔍 Diagnostics
@@ -93,48 +109,6 @@ verify: ## Run pre-flight checks: API keys, connectivity, audio files
 	@echo "$(BLUE)Running pre-flight diagnostics...$(RESET)"
 	$(PYTHON) verify_setup.py
 
-# ==============================================================================
-# 🎤 Demo (3 separate terminals)
-# ==============================================================================
-.PHONY: run-actions
-run-actions: ## Tab 1: Start the Rasa Action Server
-	@echo "$(MAGENTA)Starting Action Server on port 5055...$(RESET)"
-	$(RASA) run actions
-
-.PHONY: run-rasa
-run-rasa: ## Tab 2: Start the Rasa Agent
-	@echo "$(MAGENTA)Starting Rasa Agent on port 5005...$(RESET)"
-	$(RASA) run --enable-api --cors "*"
-
-.PHONY: demo
-demo: ## Tab 3: Run the live voice orchestration demo
-	@echo "$(MAGENTA)Starting live voice demo...$(RESET)"
-	$(PYTHON) demo_live.py
-
-# ==============================================================================
-# 🎭 The Heist Demo — add these targets to your existing Makefile
-# ==============================================================================
-
-.PHONY: run-rasa-heist
-run-rasa-heist: ## Start Rasa with sub agents enabled (use this instead of run-rasa for the heist)
-	@echo "$(MAGENTA)Starting Rasa with sub agents...$(RESET)"
-	$(RASA) run --enable-api --cors "*" --sub-agents sub_agents
-
-.PHONY: demo-heist
-demo-heist: ## Run "The Heist at First National Bank" security demo
-	@echo "$(MAGENTA)Starting The Heist demo...$(RESET)"
-	@echo "$(YELLOW)Ensure these are running first:$(RESET)"
-	@echo "  $(GREEN)make run-actions$(RESET)       Tab 1"
-	@echo "  $(GREEN)make run-rasa-heist$(RESET)    Tab 2  ← note: NOT make run-rasa"
-	@echo ""
-	$(PYTHON) demo_heist.py
-
-.PHONY: train-heist
-train-heist: ## Train the Rasa model with sub agents
-	@echo "$(BLUE)Training Rasa model with sub agents...$(RESET)"
-	$(RASA) train --sub-agents sub_agents
-	@echo "$(GREEN)✓ Training complete.$(RESET)"
-
 .PHONY: verify-heist
 verify-heist: ## Pre-flight check for all heist demo components
 	@echo "$(BLUE)Verifying heist demo components...$(RESET)"
@@ -142,11 +116,45 @@ verify-heist: ## Pre-flight check for all heist demo components
 	$(PYTHON) -c "from agents.security_classifier import SecurityClassifier; print('  ✓ security_classifier')"
 	$(PYTHON) -c "from scenario.arc import SCENARIO_ARC; print(f'  ✓ scenario arc ({len(SCENARIO_ARC)} turns)')"
 	$(PYTHON) -c "from services.tts_service import RimeTTS; print('  ✓ tts_service (multi-voice)')"
-	@echo "$(GREEN)✓ All heist components ready.$(RESET)"
+	@test -f sub_agents/llm_manager/config.yml && echo "  ✓ sub_agents/llm_manager/config.yml" || echo "  ✗ sub_agents/llm_manager/config.yml MISSING"
+	@test -f sub_agents/llm_manager/manager_agent.py && echo "  ✓ sub_agents/llm_manager/manager_agent.py" || echo "  ✗ sub_agents/llm_manager/manager_agent.py MISSING"
+	@echo "$(GREEN)✓ Heist verification complete.$(RESET)"
+
+# ==============================================================================
+# 🎤 Basic Demo (3 separate terminals)
+# ==============================================================================
+.PHONY: run-actions
+run-actions: ## Tab 1: Start the Rasa Action Server (used by both demos)
+	@echo "$(MAGENTA)Starting Action Server on port 5055...$(RESET)"
+	$(RASA) run actions
+
+.PHONY: run-rasa
+run-rasa: ## Tab 2: Start Rasa Agent (basic demo only — no sub agents)
+	@echo "$(MAGENTA)Starting Rasa Agent on port 5005...$(RESET)"
+	$(RASA) run --enable-api --cors "*"
+
+.PHONY: demo
+demo: ## Tab 3: Run the basic voice orchestration demo
+	@echo "$(MAGENTA)Starting basic voice demo...$(RESET)"
+	$(PYTHON) demo_live.py
+
+# ==============================================================================
+# 🎭 Heist Demo (3 separate terminals)
+# ==============================================================================
+.PHONY: run-rasa-heist
+run-rasa-heist: ## Tab 2: Start Rasa with sub agents (REQUIRED for heist demo)
+	@echo "$(MAGENTA)Starting Rasa Agent with sub agents on port 5005...$(RESET)"
+	@echo "$(YELLOW)Note: sub agents loaded from: sub_agents/$(RESET)"
+	$(RASA) run --enable-api --cors "*" --sub-agents sub_agents
+
+.PHONY: demo-heist
+demo-heist: ## Tab 3: Run The Heist at First National Bank security demo
+	@echo "$(MAGENTA)Starting The Heist demo...$(RESET)"
+	@echo "$(YELLOW)Ensure these are running first:$(RESET)"
+	@echo "  $(GREEN)make run-actions$(RESET)       Tab 1"
+	@echo "  $(GREEN)make run-rasa-heist$(RESET)    Tab 2  ← NOT make run-rasa"
 	@echo ""
-	@echo "$(YELLOW)Sub agent directory:$(RESET)"
-	@ls -la sub_agents/llm_manager/
- 
+	$(PYTHON) demo_heist.py
 
 # ==============================================================================
 # 🧪 Testing
@@ -171,7 +179,6 @@ inspect: ## Open interactive Rasa shell for manual conversation testing
 
 .PHONY: inspect-debug
 inspect-debug: ## Interactive Rasa shell with debug logging
-	@echo "$(BLUE)Opening interactive Rasa shell (debug)...$(RESET)"
 	$(RASA) shell --debug
 
 .PHONY: clean
@@ -183,16 +190,16 @@ clean: ## Remove build artefacts, generated audio, and cache files
 	@echo "$(GREEN)✓ Clean complete.$(RESET)"
 
 .PHONY: clean-audio
-clean-audio: ## Remove generated audio files only (re-run make generate-audio to restore)
+clean-audio: ## Remove generated audio files only
 	@echo "$(YELLOW)Removing generated audio files...$(RESET)"
 	rm -rf tests/audio
-	@echo "$(GREEN)✓ Audio files removed. Run: make generate-audio$(RESET)"
+	@echo "$(GREEN)✓ Run: make generate-audio$(RESET)"
 
 # ==============================================================================
 # 🔧 Tooling (annotate + flatten)
 # ==============================================================================
-ANNOTATE_SCOPE       ?= .
-ANNOTATE_EXT         ?= .py,.yaml,.yml,.toml,.env
+ANNOTATE_SCOPE         ?= .
+ANNOTATE_EXT           ?= .py,.yaml,.yml,.toml,.env
 ANNOTATE_MAX_NEIGHBORS ?= 6
 
 .PHONY: annotate

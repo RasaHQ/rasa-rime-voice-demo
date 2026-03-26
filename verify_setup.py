@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-# === QV-LLM:BEGIN ===
-# path: verify_setup.py
-# role: module
-# neighbors: demo_heist.py, demo_live.py, generate_user_audio.py
-# exports: ok, warn, fail, section, hint, check_python_version, check_env_var, check_module (+2 more)
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
 """
 verify_setup.py — Pre-flight diagnostics for the voice demo.
 
@@ -16,6 +7,7 @@ Checks everything required before running the demo:
   - Python dependencies
   - External service connectivity (Deepgram, Rime, Rasa)
   - Generated audio files
+  - Heist demo components (sub agents, scenario arc)
 
 Usage:
     make verify
@@ -26,7 +18,6 @@ Usage:
 import asyncio
 import importlib.util
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -85,7 +76,6 @@ def check_python_version() -> bool:
 def check_env_var(name: str, label: str) -> bool:
     value = os.getenv(name)
     if value and f"your-{name.lower().replace('_', '-')}" not in value.lower():
-        # Mask the key: show first 4 + last 4 characters
         masked = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
         ok(f"{label} ({name}={masked})")
         return True
@@ -123,6 +113,30 @@ def check_audio_files() -> bool:
     return False
 
 
+def check_heist_components() -> bool:
+    """Check all components required for the heist demo."""
+    all_ok = True
+
+    heist_files = [
+        ("demo_heist.py",                              "Heist demo orchestrator"),
+        ("scenario/arc.py",                            "Scenario arc"),
+        ("agents/caller_agent.py",                     "Caller agent"),
+        ("agents/security_classifier.py",              "Security classifier"),
+        ("sub_agents/llm_manager/config.yml",          "LLM Manager sub agent config"),
+        ("sub_agents/llm_manager/manager_agent.py",    "LLM Manager sub agent module"),
+        ("sub_agents/llm_manager/__init__.py",         "LLM Manager __init__"),
+    ]
+
+    for path, label in heist_files:
+        if Path(path).exists():
+            ok(f"{label}  ({path})")
+        else:
+            fail(f"{label} missing  ({path})")
+            all_ok = False
+
+    return all_ok
+
+
 async def check_deepgram(api_key: str | None) -> bool:
     if not api_key:
         fail("Deepgram: skipped (API key not set)")
@@ -154,7 +168,6 @@ async def check_rime(api_key: str | None) -> bool:
         return False
     try:
         import aiohttp
-        import base64
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -194,8 +207,9 @@ async def check_rasa() -> bool:
                 return False
     except Exception:
         warn("Rasa server not running — start it before the demo")
-        hint("Run: make run-rasa  (in a separate terminal)")
-        return False  # warning, not a hard failure for setup check
+        hint("Basic demo:  make run-rasa")
+        hint("Heist demo:  make run-rasa-heist  ← includes sub agents")
+        return False
 
 
 async def check_action_server() -> bool:
@@ -214,7 +228,7 @@ async def check_action_server() -> bool:
     except Exception:
         warn("Action server not running — start it before the demo")
         hint("Run: make run-actions  (in a separate terminal)")
-        return False  # warning, not a hard failure for setup check
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -229,17 +243,16 @@ async def run_checks() -> int:
     errors = 0
     warnings = 0
 
-    # ── Python ──────────────────────────────────────────────────────────────
+    # ── Python ───────────────────────────────────────────────────────────
     section("Python Environment")
     if not check_python_version():
         errors += 1
 
-    # ── API Keys ─────────────────────────────────────────────────────────────
+    # ── API Keys ─────────────────────────────────────────────────────────
     section("API Keys  (.env)")
     rasa_ok = check_env_var("RASA_LICENSE", "Rasa Pro License")
     dg_key = os.getenv("DEEPGRAM_API_KEY")
     rime_key = os.getenv("RIME_API_KEY")
-    openai_key = os.getenv("NEBIUS_API_KEY")
 
     if not check_env_var("DEEPGRAM_API_KEY", "Deepgram API Key"):
         errors += 1
@@ -250,7 +263,7 @@ async def run_checks() -> int:
     if not rasa_ok:
         errors += 1
 
-    # ── Python Dependencies ──────────────────────────────────────────────────
+    # ── Python Dependencies ──────────────────────────────────────────────
     section("Python Dependencies")
     deps = [
         ("rasa", "Rasa Pro"),
@@ -264,7 +277,7 @@ async def run_checks() -> int:
         if not check_module(module, label):
             errors += 1
 
-    # ── Config Files ─────────────────────────────────────────────────────────
+    # ── Config Files ─────────────────────────────────────────────────────
     section("Project Config Files")
     config_files = [
         "config.yml",
@@ -278,19 +291,24 @@ async def run_checks() -> int:
         if not check_config_file(path):
             errors += 1
 
-    # ── Audio Files ───────────────────────────────────────────────────────────
+    # ── Audio Files ───────────────────────────────────────────────────────
     section("Demo Audio Files")
     if not check_audio_files():
         errors += 1
 
-    # ── External Service Connectivity ─────────────────────────────────────────
+    # ── Heist Demo Components ─────────────────────────────────────────────
+    section("Heist Demo Components")
+    if not check_heist_components():
+        errors += 1
+
+    # ── External Service Connectivity ────────────────────────────────────
     section("External Service Connectivity")
     if not await check_deepgram(dg_key):
         errors += 1
     if not await check_rime(rime_key):
         errors += 1
 
-    # ── Running Services (warnings only — not required at verify time) ─────────
+    # ── Running Services (warnings only) ─────────────────────────────────
     section("Running Services  (required at demo time)")
     rasa_running = await check_rasa()
     actions_running = await check_action_server()
@@ -299,17 +317,23 @@ async def run_checks() -> int:
     if not actions_running:
         warnings += 1
 
-    # ── Summary ───────────────────────────────────────────────────────────────
+    # ── Summary ──────────────────────────────────────────────────────────
     print(f"\n{BOLD}{'=' * 60}{RESET}")
     if errors == 0 and warnings == 0:
         print(f"{GREEN}{BOLD}✓ All checks passed — ready to demo!{RESET}")
         print()
-        print("  make run-actions   # Tab 1")
-        print("  make run-rasa      # Tab 2")
-        print("  make demo          # Tab 3")
+        print(f"  {BLUE}Basic demo:{RESET}")
+        print("    make run-actions   # Tab 1")
+        print("    make run-rasa      # Tab 2")
+        print("    make demo          # Tab 3")
+        print()
+        print(f"  {MAGENTA}Heist demo:{RESET}")
+        print("    make run-actions      # Tab 1")
+        print("    make run-rasa-heist   # Tab 2  ← sub agents enabled")
+        print("    make demo-heist       # Tab 3")
     elif errors == 0:
         print(f"{YELLOW}{BOLD}⚠ Setup complete with {warnings} warning(s).{RESET}")
-        print(f"{YELLOW}  Start the services above before running: make demo{RESET}")
+        print(f"{YELLOW}  Start the services above before running the demo.{RESET}")
     else:
         print(f"{RED}{BOLD}✗ {errors} error(s) found — fix them before running the demo.{RESET}")
         if warnings:
@@ -318,6 +342,9 @@ async def run_checks() -> int:
 
     return 0 if errors == 0 else 1
 
+
+# Need MAGENTA for summary block
+MAGENTA = "\033[95m"
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(run_checks()))
