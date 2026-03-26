@@ -2,9 +2,9 @@
 # === QV-LLM:BEGIN ===
 # path: generate_user_audio.py
 # role: module
-# neighbors: demo_live.py, verify_setup.py
+# neighbors: demo_heist.py, demo_live.py, verify_setup.py
 # git_branch: chore/updateLatest
-# git_commit: fcce488
+# git_commit: b51afa8
 # === QV-LLM:END ===
 
 """

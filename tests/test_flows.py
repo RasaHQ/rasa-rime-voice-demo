@@ -1,10 +1,10 @@
 # === QV-LLM:BEGIN ===
 # path: tests/test_flows.py
 # role: module
-# neighbors: __init__.py, test_voice_full_pipeline.py, test_voice_production.py
+# neighbors: __init__.py
 # exports: TestDeepgramASR, TestRimeTTS, TestConversationFlows, sample_audio_path, asr_client, tts_client
 # git_branch: chore/updateLatest
-# git_commit: fcce488
+# git_commit: b51afa8
 # === QV-LLM:END ===
 
 """

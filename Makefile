@@ -112,6 +112,43 @@ demo: ## Tab 3: Run the live voice orchestration demo
 	$(PYTHON) demo_live.py
 
 # ==============================================================================
+# 🎭 The Heist Demo — add these targets to your existing Makefile
+# ==============================================================================
+
+.PHONY: run-rasa-heist
+run-rasa-heist: ## Start Rasa with sub agents enabled (use this instead of run-rasa for the heist)
+	@echo "$(MAGENTA)Starting Rasa with sub agents...$(RESET)"
+	$(RASA) run --enable-api --cors "*" --sub-agents sub_agents
+
+.PHONY: demo-heist
+demo-heist: ## Run "The Heist at First National Bank" security demo
+	@echo "$(MAGENTA)Starting The Heist demo...$(RESET)"
+	@echo "$(YELLOW)Ensure these are running first:$(RESET)"
+	@echo "  $(GREEN)make run-actions$(RESET)       Tab 1"
+	@echo "  $(GREEN)make run-rasa-heist$(RESET)    Tab 2  ← note: NOT make run-rasa"
+	@echo ""
+	$(PYTHON) demo_heist.py
+
+.PHONY: train-heist
+train-heist: ## Train the Rasa model with sub agents
+	@echo "$(BLUE)Training Rasa model with sub agents...$(RESET)"
+	$(RASA) train --sub-agents sub_agents
+	@echo "$(GREEN)✓ Training complete.$(RESET)"
+
+.PHONY: verify-heist
+verify-heist: ## Pre-flight check for all heist demo components
+	@echo "$(BLUE)Verifying heist demo components...$(RESET)"
+	$(PYTHON) -c "from agents.caller_agent import CallerAgent; print('  ✓ caller_agent')"
+	$(PYTHON) -c "from agents.security_classifier import SecurityClassifier; print('  ✓ security_classifier')"
+	$(PYTHON) -c "from scenario.arc import SCENARIO_ARC; print(f'  ✓ scenario arc ({len(SCENARIO_ARC)} turns)')"
+	$(PYTHON) -c "from services.tts_service import RimeTTS; print('  ✓ tts_service (multi-voice)')"
+	@echo "$(GREEN)✓ All heist components ready.$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Sub agent directory:$(RESET)"
+	@ls -la sub_agents/llm_manager/
+ 
+
+# ==============================================================================
 # 🧪 Testing
 # ==============================================================================
 .PHONY: test

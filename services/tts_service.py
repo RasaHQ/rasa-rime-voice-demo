@@ -4,27 +4,36 @@
 # neighbors: __init__.py, asr_service.py
 # exports: RimeTTSError, RimeTTS
 # git_branch: chore/updateLatest
-# git_commit: fcce488
+# git_commit: b51afa8
 # === QV-LLM:END ===
 
 """
-Rime TTS (Text-to-Speech) service.
+Rime TTS service — supports per-agent voice assignment.
 
-Encapsulates all Rime API interaction. Used by both the demo
-orchestrator and the test suite — no UI or demo logic lives here.
+Three distinct voices for the three agents:
+  - Caller (adversarial customer): abbie
+  - Rasa bank agent (secure line):  cove
+  - LLM bank manager (fooled):      luna
 """
 
 import base64
 import logging
 import os
+from typing import Optional
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
 
 RIME_API_URL = "https://users.rime.ai/v1/rime-tts"
-DEFAULT_SPEAKER = "cove"
-DEFAULT_MODEL = "mistv2"
+MODEL_ID = "mistv2"
+
+# Voice assignments per agent role
+VOICE_MAP = {
+    "caller":  "abbie",   # Female, conversational — the adversarial customer
+    "rasa":    "cove",    # Male, professional — the secure Rasa agent
+    "manager": "luna",    # Female, warm — the LLM manager who gets fooled
+}
 
 
 class RimeTTSError(Exception):
@@ -33,47 +42,38 @@ class RimeTTSError(Exception):
 
 class RimeTTS:
     """
-    Thin async wrapper around the Rime TTS REST API.
+    Rime TTS with per-agent voice support.
 
     Usage:
         tts = RimeTTS()
-        audio_bytes = await tts.synthesize("Hello, how can I help you?")
+        audio = await tts.synthesize("Hello!", agent_role="rasa")
     """
 
-    def __init__(
-        self,
-        api_key: str | None = None,
-        speaker: str = DEFAULT_SPEAKER,
-        model_id: str = DEFAULT_MODEL,
-        speed_alpha: float = 1.0,
-        reduce_latency: bool = True,
-    ):
+    def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("RIME_API_KEY")
         if not self.api_key:
             raise RimeTTSError(
-                "RIME_API_KEY is not set. "
-                "Add it to your .env file or pass it explicitly."
+                "RIME_API_KEY is not set. Add it to your .env file."
             )
-        self.speaker = speaker
-        self.model_id = model_id
-        self.speed_alpha = speed_alpha
-        self.reduce_latency = reduce_latency
 
-    async def synthesize(self, text: str) -> bytes:
+    def _voice_for(self, agent_role: str) -> str:
+        return VOICE_MAP.get(agent_role.lower(), "cove")
+
+    async def synthesize(self, text: str, agent_role: str = "rasa") -> bytes:
         """
-        Convert text to speech using Rime Mist v2.
+        Convert text to speech using the voice assigned to the agent role.
 
         Args:
-            text: The text to synthesize. Must be non-empty.
+            text: Text to synthesize.
+            agent_role: One of 'caller', 'rasa', 'manager'.
 
         Returns:
-            Raw WAV audio bytes decoded from the Rime response.
-
-        Raises:
-            RimeTTSError: On API error, connectivity failure, or empty text.
+            Raw WAV audio bytes.
         """
         if not text or not text.strip():
             raise RimeTTSError("Cannot synthesize empty text.")
+
+        speaker = self._voice_for(agent_role)
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -81,13 +81,13 @@ class RimeTTS:
         }
         payload = {
             "text": text,
-            "speaker": self.speaker,
-            "modelId": self.model_id,
-            "speedAlpha": self.speed_alpha,
-            "reduceLatency": self.reduce_latency,
+            "speaker": speaker,
+            "modelId": MODEL_ID,
+            "speedAlpha": 1.0,
+            "reduceLatency": True,
         }
 
-        logger.debug("Sending TTS request for: %r", text[:60])
+        logger.debug("TTS [%s/%s]: %r", agent_role, speaker, text[:60])
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -109,24 +109,14 @@ class RimeTTS:
         if "audioContent" not in data:
             raise RimeTTSError(
                 f"Unexpected Rime response — 'audioContent' missing. "
-                f"Keys received: {list(data.keys())}"
+                f"Keys: {list(data.keys())}"
             )
 
-        audio_bytes = base64.b64decode(data["audioContent"])
-        logger.debug("Received %d bytes of audio", len(audio_bytes))
-        return audio_bytes
+        return base64.b64decode(data["audioContent"])
 
     async def health_check(self) -> bool:
-        """
-        Verify the Rime API key is valid with a minimal synthesis request.
-
-        Returns True if the key is accepted, False otherwise.
-        Does not raise — safe to use in verify_setup.py.
-        """
         try:
-            await self.synthesize("Hello.")
+            await self.synthesize("Hello.", agent_role="rasa")
             return True
-        except RimeTTSError:
-            return False
         except Exception:
             return False

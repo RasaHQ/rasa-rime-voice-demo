@@ -1,7 +1,7 @@
 # === QV-LLM:BEGIN ===
 # path: tests/__init__.py
 # role: module
-# neighbors: test_flows.py, test_voice_full_pipeline.py, test_voice_production.py
+# neighbors: test_flows.py
 # git_branch: chore/updateLatest
-# git_commit: fcce488
+# git_commit: b51afa8
 # === QV-LLM:END ===

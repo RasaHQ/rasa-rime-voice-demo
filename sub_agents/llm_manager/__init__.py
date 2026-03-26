@@ -1,7 +1,7 @@
 # === QV-LLM:BEGIN ===
-# path: services/__init__.py
+# path: sub_agents/llm_manager/__init__.py
 # role: module
-# neighbors: asr_service.py, tts_service.py
+# neighbors: manager_agent.py
 # git_branch: chore/updateLatest
 # git_commit: b51afa8
 # === QV-LLM:END ===
