@@ -1,37 +1,62 @@
-# === QV-LLM:BEGIN ===
-# path: pyproject.toml
-# role: module
-# git_branch: main
-# git_commit: 28e1d95
-# === QV-LLM:END ===
-
 # pyproject.toml
 [project]
 name = "rasa-rime-voice-demo"
-version = "1.0.0"
-description = "Real-time Voice Orchestration with Rasa, Rime, and Deepgram"
+version = "2.0.0"
+description = "Low-latency voice orchestration with Rasa Pro, Rime TTS, and Deepgram ASR"
 requires-python = ">=3.10,<3.12"
 dependencies = [
+    # Rasa
     "rasa-pro>=3.9.0",
     "rasa-sdk>=3.8.0",
+
+    # LLM
     "openai>=1.0.0",
+
+    # Networking & async
     "aiohttp>=3.9.0",
+
+    # Audio
     "pydub>=0.25.1",
     "simpleaudio>=1.0.4",
-    "python-dotenv>=1.0.0",
+
+    # UI & utilities
     "rich>=13.0.0",
-    "spacy>=3.0.0"
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+dev = [
+    "ruff>=0.1.0",
 ]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-# --- THE FIX IS HERE ---
 [tool.setuptools]
-# We explicitly tell setuptools that 'actions' is the only Python package here.
-# This prevents it from trying to compile 'data' or 'conversations' as code.
-packages = ["actions"]
+# Only 'actions' and 'services' are real Python packages here.
+# This prevents setuptools trying to compile 'data/' or 'conversations/'.
+packages = ["actions", "services"]
 
 [tool.uv]
-# This ensures uv manages the venv correctly
+# uv manages the virtualenv
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "integration: marks tests that require live services (Deepgram, Rime, Rasa)",
+]
+addopts = ["-v", "--tb=short"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [".venv", "models", "__pycache__", ".rasa", "tests/audio"]
