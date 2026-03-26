@@ -20,11 +20,11 @@ model_groups:
   - id: nebius_llm
     models:
       - provider: self-hosted
-        model: MiniMaxAI/MiniMax-M2.5
-        api_base: "https://api.tokenfactory.us-central1.nebius.com/v1"
+        model: google/gemma-3-27b-it-fast
+        api_base: "https://api.tokenfactory.nebius.com/v1"
         api_key: ${NEBIUS_API_KEY}
         temperature: 0.1
-        max_tokens: 256
+        max_tokens: 1024
         timeout: 30
 
   - id: nebius_embeddings

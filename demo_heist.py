@@ -72,13 +72,35 @@ console = Console()
 
 
 def strip_think(text: str) -> str:
-    """
-    Remove <think>...</think> chain-of-thought blocks that some LLMs
-    (e.g. MiniMax) emit before their actual response.
-    Strips the tags and any leading/trailing whitespace left behind.
-    """
+    """Remove <think>...</think> chain-of-thought blocks."""
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     return cleaned.strip()
+
+
+_MARKDOWN_RE = [
+    (re.compile(r'\*\*(.+?)\*\*', re.DOTALL), r'\1'),
+    (re.compile(r'\*(.+?)\*',    re.DOTALL), r'\1'),
+    (re.compile(r'_(.+?)_',      re.DOTALL), r'\1'),
+    (re.compile(r'`(.+?)`',      re.DOTALL), r'\1'),
+    (re.compile(r'#+\s*'),                   r''),
+]
+
+
+def clean_for_speech(text: str) -> str:
+    """
+    Strip markdown formatting that TTS would speak literally.
+    Applies to both caller and bank agent responses.
+    """
+    text = strip_think(text)
+    for pattern, replacement in _MARKDOWN_RE:
+        text = pattern.sub(replacement, text)
+    # Deduplicate repeated sentences (Rasa doubled-response bug)
+    sentences = text.split(". ")
+    seen = []
+    for s in sentences:
+        if s not in seen:
+            seen.append(s)
+    return ". ".join(seen).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -444,15 +466,55 @@ async def send_to_rasa(message: str, sender_id: str) -> str:
                     raise RuntimeError(f"Rasa HTTP {resp.status}: {body}")
                 responses = await resp.json()
                 texts = [r["text"] for r in responses if "text" in r]
-                return " ".join(texts) if texts else "(no response)"
+                # Deduplicate consecutive identical sentences (doubled response bug)
+                if texts:
+                    deduped = [texts[0]]
+                    for t in texts[1:]:
+                        if t != deduped[-1]:
+                            deduped.append(t)
+                    return " ".join(deduped)
+                return "(no response)"
     except Exception as exc:
         logger.error("Rasa error: %s", exc)
         return "I'm sorry, I'm having technical difficulties."
 
 
+async def cancel_active_flow(sender_id: str) -> None:
+    """
+    Send a 'cancel' command to Rasa to break out of any stuck flow.
+    Used when Rasa is blocking on a collect step and needs to be freed
+    so it can process a manager escalation request.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                RASA_URL,
+                json={"sender": sender_id, "message": "/cancel"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                logger.info("Flow cancel sent, status: %s", resp.status)
+    except Exception as exc:
+        logger.warning("Could not cancel flow: %s", exc)
+
+
 def is_transfer_response(text: str) -> bool:
     """Detect whether Rasa just triggered the manager handoff."""
     return TRANSFER_SENTINEL.lower() in text.lower()
+
+
+def is_rasa_stuck(text: str) -> bool:
+    """
+    Detect whether Rasa is stuck in a collect loop.
+    Signs: asking about transfer accounts when the topic has moved on,
+    or saying it can't understand while still referencing an old flow slot.
+    """
+    stuck_phrases = [
+        "which account should i transfer to",
+        "which account would you like to transfer from",
+        "how much would you like to transfer",
+    ]
+    lower = text.lower()
+    return any(phrase in lower for phrase in stuck_phrases)
 
 
 # ---------------------------------------------------------------------------
@@ -595,7 +657,25 @@ async def run_heist() -> None:
             )
 
             t0 = time.time()
-            bank_response = strip_think(await send_to_rasa(caller_text, sender_id))
+            bank_response = clean_for_speech(await send_to_rasa(caller_text, sender_id))
+
+            # ── Stuck flow detection ──────────────────────────────────────
+            # If Rasa is stuck in a collect loop (e.g. asking about transfer
+            # destination when the caller wants a manager), cancel the active
+            # flow and retry so CALM can process the actual intent.
+            if is_rasa_stuck(bank_response) and turn_config.turn_number >= 4:
+                log._emit("rasa_stuck_detected", {
+                    "turn": state.turn,
+                    "stuck_response": bank_response,
+                    "caller_text": caller_text,
+                })
+                await cancel_active_flow(sender_id)
+                bank_response = clean_for_speech(await send_to_rasa(caller_text, sender_id))
+                log._emit("rasa_after_cancel", {
+                    "turn": state.turn,
+                    "new_response": bank_response,
+                })
+
             log.rasa_exchange(
                 sender_id, caller_text, bank_response,
                 (time.time() - t0) * 1000,
