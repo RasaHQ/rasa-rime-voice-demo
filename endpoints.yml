@@ -16,6 +16,12 @@ action_endpoint:
 # ==============================================================================
 # LLM Model Groups
 # ==============================================================================
+# Two separate model groups:
+#   nebius_llm_gemma  — Rasa's CompactLLMCommandGenerator (no tool calls needed)
+#                       Gemma: fast, no <think> tags, parses commands cleanly
+#   nebius_llm_minimax — LLM Manager sub agent (needs tool_choice support)
+#                        MiniMax: supports auto tool choice for MCPOpenAgent
+ 
 model_groups:
   - id: nebius_llm
     models:
@@ -26,7 +32,17 @@ model_groups:
         temperature: 0.1
         max_tokens: 1024
         timeout: 30
-
+ 
+  - id: nebius_llm_minimax
+    models:
+      - provider: self-hosted
+        model: MiniMaxAI/MiniMax-M2.5
+        api_base: "https://api.tokenfactory.us-central1.nebius.com/v1"
+        api_key: ${NEBIUS_API_KEY}
+        temperature: 0.7
+        max_tokens: 512
+        timeout: 60
+ 
   - id: nebius_embeddings
     models:
       - provider: openai

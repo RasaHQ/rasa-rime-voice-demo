@@ -19,7 +19,7 @@ agent:
 configuration:
   module: sub_agents.llm_manager.manager_agent.LLMManagerAgent
   llm:
-    model_group: nebius_llm
+    model_group: nebius_llm_minimax
 
 connections:
   mcp_servers:

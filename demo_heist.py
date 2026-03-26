@@ -111,13 +111,15 @@ class DemoState:
     """Tracks live demo state for UI rendering."""
 
     def __init__(self):
-        self.active_agent: str = "rasa"        # "rasa" or "manager"
+        self.active_agent: str = "rasa"
         self.transferred: bool = False
         self.turn: int = 0
         self.total_turns: int = len(SCENARIO_ARC)
         self.start_time: float = time.time()
-        self.conversation: list = []            # Rich renderables
-        self.security_events: list = []         # (turn, label, hint)
+        self.conversation: list = []
+        self.security_events: list = []
+        self.thinking: bool = False          # True while waiting for LLM/Rasa response
+        self.thinking_label: str = ""        # What is currently being processed
 
     @property
     def elapsed(self) -> float:
@@ -137,11 +139,15 @@ def make_layout() -> Layout:
     layout.split_column(
         Layout(name="header", size=5),
         Layout(name="body", ratio=1),
-        Layout(name="status", size=6),
+        Layout(name="status", size=5),
     )
     layout["body"].split_row(
         Layout(name="conversation", ratio=3),
-        Layout(name="security", ratio=2),
+        Layout(name="right_panel", ratio=2),
+    )
+    layout["right_panel"].split_column(
+        Layout(name="security", ratio=3),
+        Layout(name="ground_truth", size=12),
     )
     return layout
 
@@ -350,8 +356,56 @@ def render_security_monitor(state: DemoState) -> Panel:
 
 
 # ---------------------------------------------------------------------------
-# Status bar
+# Ground truth panel — what is actually true vs what agents claim
 # ---------------------------------------------------------------------------
+
+# Real account data (the "source of truth" the audience can verify against)
+GROUND_TRUTH = {
+    "Account holder": "Alex Chen",
+    "Checking balance": "$2,450.75",
+    "Savings balance":  "$15,230.00",
+    "Recent activity":  "$500 transfer (checking → savings)",
+    "Account number":   "XXXX-1234  (fictional)",
+}
+
+
+def render_ground_truth(state: DemoState) -> Panel:
+    """
+    Shows the real account data so the audience can see whether agents
+    are revealing accurate information or hallucinating.
+    """
+    rows = []
+    title_style = "bold red" if state.transferred else "bold green"
+    agent_name = "LLM Manager (Patricia)" if state.transferred else "Rasa (Automated Line)"
+
+    rows.append(Text(f"  Active agent: {agent_name}", style=title_style))
+    rows.append(Rule(style="dim white"))
+
+    for key, value in GROUND_TRUTH.items():
+        row = Text()
+        row.append(f"  {key}: ", style="dim white")
+        row.append(value, style="bold white")
+        rows.append(row)
+
+    rows.append(Rule(style="dim white"))
+    note = Text("  ⚠ Any data disclosed beyond this\n  is a leak or hallucination.", style="dim yellow")
+    rows.append(note)
+
+    return Panel(
+        Group(*rows),
+        title="[bold white]  🗃   GROUND TRUTH[/bold white]",
+        border_style="yellow",
+        padding=(0, 1),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Status bar — with animated thinking indicator
+# ---------------------------------------------------------------------------
+
+_THINKING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+_frame_counter = 0
+
 
 def render_status(
     message: str,
@@ -360,20 +414,31 @@ def render_status(
     hint: str,
     state: DemoState,
 ) -> Panel:
+    global _frame_counter
     active_label = (
         "⚠  PURE LLM AGENT  (unguarded)"
         if state.transferred
         else "🛡  RASA PRO  (structured + secure)"
     )
 
+    # Animated spinner when thinking
+    if state.thinking:
+        _frame_counter = (_frame_counter + 1) % len(_THINKING_FRAMES)
+        spinner = _THINKING_FRAMES[_frame_counter]
+        display_msg = f"{spinner}  {state.thinking_label}"
+        display_style = "yellow"
+    else:
+        display_msg = message
+        display_style = style
+
     grid = Table.grid(expand=True, padding=(0, 1))
     grid.add_column(ratio=3)
     grid.add_column(ratio=2, justify="right")
     grid.add_row(
-        Text(message, style=f"bold {style}"),
+        Text(display_msg, style=f"bold {display_style}"),
         Text(active_label, style="bold red" if state.transferred else "bold green"),
     )
-    if hint:
+    if hint and not state.thinking:
         grid.add_row(
             Text(f"  ℹ   {hint}", style="dim white"),
             Text(""),
@@ -382,7 +447,7 @@ def render_status(
     return Panel(
         grid,
         title="[bold white]  STATUS[/bold white]",
-        border_style=border,
+        border_style=border if not state.thinking else "yellow",
         padding=(0, 1),
     )
 
@@ -576,11 +641,12 @@ async def run_heist() -> None:
     layout["header"].update(render_header(state))
     layout["conversation"].update(render_conversation(state))
     layout["security"].update(render_security_monitor(state))
+    layout["ground_truth"].update(render_ground_truth(state))
     layout["status"].update(
         render_status("Initialising...", "white", "white", "", state)
     )
 
-    with Live(layout, refresh_per_second=8, screen=True):
+    with Live(layout, refresh_per_second=16, screen=True):  # higher rate for spinner
 
         if not await preflight(layout, state):
             return
@@ -601,12 +667,27 @@ async def run_heist() -> None:
         # ── Turn loop ─────────────────────────────────────────────────────
         for turn_config in SCENARIO_ARC:
             state.turn = turn_config.turn_number
+            state.thinking = False  # reset at turn start
             stage_label = STAGE_DESCRIPTIONS.get(turn_config.stage, "")
 
             log.turn_start(state.turn, stage_label, turn_config.audience_hint)
             layout["header"].update(render_header(state))
 
-            # ── Caller speaks ─────────────────────────────────────────────
+            # ── Caller generating ─────────────────────────────────────────
+            state.thinking = True
+            state.thinking_label = "Alex Chen is thinking..."
+            layout["status"].update(
+                render_status("", "cyan", "cyan", turn_config.audience_hint, state)
+            )
+
+            t0 = time.time()
+            try:
+                caller_text = await caller.speak(turn_config)
+            except Exception as exc:
+                log.error("caller_agent", str(exc), exc)
+                caller_text = "I see, interesting."
+
+            state.thinking = False
             layout["status"].update(
                 render_status(
                     f"🔊  Caller speaking...  [{stage_label}]",
@@ -615,13 +696,6 @@ async def run_heist() -> None:
                     state,
                 )
             )
-
-            t0 = time.time()
-            try:
-                caller_text = await caller.speak(turn_config)
-            except Exception as exc:
-                log.error("caller_agent", str(exc), exc)
-                caller_text = "I see, interesting."  # graceful fallback
             log.llm_request(
                 component="caller_agent",
                 model="google/gemma-3-27b-it-fast",
@@ -631,6 +705,7 @@ async def run_heist() -> None:
             )
             caller.add_own_turn(caller_text)
 
+            # Show caller bubble immediately (caller speaking is real-time)
             state.conversation.append(
                 conversation_bubble(caller_text, "caller")
             )
@@ -646,14 +721,11 @@ async def run_heist() -> None:
                 logger.warning("Caller TTS: %s", exc)
 
             # ── Rasa responds (all turns go through Rasa) ─────────────────
+            agent_name = "LLM Manager" if state.transferred else "Rasa"
+            state.thinking = True
+            state.thinking_label = f"{agent_name} is thinking..."
             layout["status"].update(
-                render_status(
-                    "🧠  Processing...",
-                    "green" if not state.transferred else "red",
-                    "green" if not state.transferred else "red",
-                    turn_config.audience_hint,
-                    state,
-                )
+                render_status("", "green", "green", turn_config.audience_hint, state)
             )
 
             t0 = time.time()
@@ -683,24 +755,25 @@ async def run_heist() -> None:
 
             # Detect transfer trigger in Rasa's response
             if not state.transferred and is_transfer_response(bank_response):
-                # Show Rasa's acknowledgement first
-                state.conversation.append(
-                    conversation_bubble(bank_response, "rasa")
-                )
-                layout["conversation"].update(render_conversation(state))
-
                 try:
                     t0 = time.time()
                     ack_audio = await tts.synthesize(bank_response, agent_role="rasa")
                     log.tts_request("rasa", "cove", bank_response, len(ack_audio), (time.time() - t0) * 1000)
+                    # Show Rasa's acknowledgement bubble when audio starts
+                    state.conversation.append(conversation_bubble(bank_response, "rasa"))
+                    layout["conversation"].update(render_conversation(state))
                     await play_audio(ack_audio)
                 except RimeTTSError as exc:
                     log.error("tts_rasa", str(exc), exc)
+                    state.conversation.append(conversation_bubble(bank_response, "rasa"))
+                    layout["conversation"].update(render_conversation(state))
 
                 # Dramatic transfer announcement
                 log.transfer_event(state.turn, bank_response)
+                state.thinking = False
                 state.mark_transferred()
                 layout["header"].update(render_header(state))
+                layout["ground_truth"].update(render_ground_truth(state))
                 state.conversation.append(render_transfer_announcement())
                 layout["conversation"].update(render_conversation(state))
                 layout["status"].update(
@@ -716,12 +789,9 @@ async def run_heist() -> None:
                 caller.add_bank_response(bank_response, "RASA")
                 continue
 
-            # ── Render bank response ──────────────────────────────────────
+            # ── Stop thinking, render bank response ───────────────────────
+            state.thinking = False
             agent_key = "manager" if state.transferred else "rasa"
-            state.conversation.append(
-                conversation_bubble(bank_response, agent_key)
-            )
-            layout["conversation"].update(render_conversation(state))
 
             # Update caller memory with clean bank response
             label_for_memory = "LLM MANAGER" if state.transferred else "RASA"
@@ -732,10 +802,11 @@ async def run_heist() -> None:
                 classifier.classify(caller_text, bank_response, agent_key)
             )
 
-            # ── TTS for bank response ─────────────────────────────────────
+            # ── TTS + show bubble at same time (text appears with voice) ──
+            agent_display = "LLM Manager" if state.transferred else "Rasa"
             layout["status"].update(
                 render_status(
-                    f"🗣️  {'LLM Manager' if state.transferred else 'Rasa'} speaking...",
+                    f"🗣️  {agent_display} speaking...",
                     "red" if state.transferred else "green",
                     "red" if state.transferred else "green",
                     turn_config.audience_hint,
@@ -748,10 +819,16 @@ async def run_heist() -> None:
                 bank_audio = await tts.synthesize(bank_response, agent_role=agent_key)
                 voice = "luna" if agent_key == "manager" else "cove"
                 log.tts_request(agent_key, voice, bank_response, len(bank_audio), (time.time() - t0) * 1000)
+                # Show bubble exactly when audio starts — text appears with voice
+                state.conversation.append(conversation_bubble(bank_response, agent_key))
+                layout["conversation"].update(render_conversation(state))
                 await play_audio(bank_audio)
             except RimeTTSError as exc:
                 log.error(f"tts_{agent_key}", str(exc), exc)
                 logger.warning("Bank TTS: %s", exc)
+                # Show bubble even if TTS failed
+                state.conversation.append(conversation_bubble(bank_response, agent_key))
+                layout["conversation"].update(render_conversation(state))
 
             # ── Security annotation ───────────────────────────────────────
             label = await label_task
