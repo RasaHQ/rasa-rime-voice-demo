@@ -182,6 +182,7 @@ class DemoState:
     def __init__(self):
         self.active_agent: str = "rasa"
         self.transferred: bool = False
+        self.pending_transfer: bool = False   # True once caller has demanded a manager but Rasa hasn't transferred yet
         self.turn: int = 0
         self.total_turns: int = len(SCENARIO_ARC)
         self.start_time: float = time.time()
@@ -703,21 +704,70 @@ def is_transfer_response(text: str) -> bool:
 
 def is_human_handoff_rejected(text: str) -> bool:
     """
-    Detect whether Rasa's pattern_human_handoff fired instead of request_human.
-    This happens when CompactLLMCommandGenerator emits HumanHandoffCommand()
-    instead of StartFlowCommand(flow='request_human').
-    The pattern produces a message saying it cannot connect to a human agent.
-    We detect this and force the correct flow.
+    Detect any Rasa response that fails to honour a manager-escalation request.
+
+    Covers three failure modes observed in the wild:
+      1. HumanHandoffCommand fires instead of StartFlowCommand(flow='request_human')
+         → produces "cannot connect you" / "unable to connect" style phrases
+      2. CompactLLMCommandGenerator outputs `hand over` which it cannot parse
+         → falls back to CannotHandleCommand → utter_ask_rephrase / utter_did_not_catch
+      3. Any chitchat / security-deflect pattern that didn't understand the request
+
+    All of these mean the transfer DID NOT happen — we must force a retry.
     """
     rejection_phrases = [
+        # Explicit refusals
         "cannot help you with at the moment",
         "unable to connect you",
         "i can't transfer you",
         "not able to connect",
         "cannot connect you to",
+        # CannotHandleCommand fallbacks (utter_ask_rephrase / utter_did_not_catch)
+        "having trouble understanding",
+        "didn't catch that",
+        "say that differently",
+        "could you repeat",
+        "try rephrasing",
+        "couldn't catch",
+        # Generic "I can't help with that" deflections
+        "only able to assist with",
+        "only able to help with",
+        "not trained to help",
+        "cannot help with that",
+        "can only help with",
     ]
     lower = text.lower()
     return any(phrase in lower for phrase in rejection_phrases)
+
+
+
+async def attempt_transfer_recovery(sender_id: str, log, turn: int) -> str:
+    """
+    Attempt to trigger StartFlowCommand(flow='request_human') using progressively
+    more explicit messages.
+
+    Background: CompactLLMCommandGenerator maps manager-escalation requests to the
+    `hand over` action → HumanHandoffCommand — NOT StartFlowCommand. HumanHandoffCommand
+    has no listener in this CALM setup, so Rasa returns empty or a confusion response.
+    We bypass this by sending messages the LLM maps directly to `start flow request_human`,
+    including the literal CALM command string as final fallback (the LLM echoes it →
+    parsed as StartFlowCommand(flow='request_human')).
+    """
+    recovery_messages = [
+        # Different natural-language phrasing — avoids the `hand over` trigger
+        "I demand to speak to a manager. Transfer me to a human agent right now.",
+        # CALM-flow-specific phrasing
+        "Please begin the request human escalation procedure for this customer.",
+        # Literal CALM command — CompactLLMCommandGenerator echoes it as-is
+        "start flow request_human",
+    ]
+    for msg in recovery_messages:
+        log._emit("transfer_recovery_attempt", {"turn": turn, "message": msg})
+        resp = clean_for_speech(await send_to_rasa(msg, sender_id))
+        if resp and resp.strip():
+            log._emit("transfer_recovery_response", {"turn": turn, "response": resp[:120]})
+            return resp
+    return ""
 
 
 def is_rasa_stuck(text: str) -> bool:
@@ -893,39 +943,46 @@ async def run_heist() -> None:
             raw_response = await send_to_rasa(asr_text, sender_id)
             bank_response = clean_for_speech(raw_response)
 
-            # ── Human handoff rejection recovery ─────────────────────────
-            # If Rasa fired pattern_human_handoff (HumanHandoffCommand) instead
-            # of StartFlowCommand(flow='request_human'), it returns a message
-            # saying "I cannot connect you to a human agent at the moment."
-            # We detect this and force-trigger the correct flow by sending an
-            # explicit intent trigger. This bypasses CompactLLMCommandGenerator
-            # entirely and goes straight to the request_human flow.
+            # ── Transfer recovery ─────────────────────────────────────────
+            # CompactLLMCommandGenerator maps "I need a manager" to the `hand over`
+            # action, which produces HumanHandoffCommand — NOT StartFlowCommand.
+            # HumanHandoffCommand has no listener here, so Rasa either:
+            #   (a) returns a confusion / rephrase / rejection response, or
+            #   (b) returns nothing at all (empty).
+            # We detect all these failure modes and attempt recovery via
+            # attempt_transfer_recovery(), which escalates through increasingly
+            # explicit messages, ending with the literal CALM command string.
             _caller_lower = caller_text.lower()
             _wants_human = any(w in _caller_lower for w in
                                ["manager", "supervisor", "human", "person", "real person",
                                 "speak to someone", "speak to a person"])
-            if (not state.transferred
-                    and is_human_handoff_rejected(bank_response)
-                    and _wants_human):
-                log._emit("human_handoff_rejected_recovery", {
-                    "turn": state.turn,
-                    "original_response": bank_response,
-                    "caller_text": caller_text,
-                })
-                # Force request_human flow via an explicit natural language trigger.
-                # In Rasa CALM, we send a message that strongly matches request_human.
-                # The flow description says to ALWAYS use start flow request_human
-                # for manager requests — this message is unambiguous.
-                force_msg = "I need to speak to a human manager immediately. Please connect me to a manager right now."
-                forced_response = clean_for_speech(
-                    await send_to_rasa(force_msg, sender_id)
+
+            if not state.transferred and _wants_human:
+                needs_recovery = (
+                    not bank_response                          # empty response
+                    or is_human_handoff_rejected(bank_response)  # confusion/rejection
+                    or state.pending_transfer                  # previous turn also failed
                 )
-                if forced_response and not is_human_handoff_rejected(forced_response):
-                    bank_response = forced_response
-                    log._emit("human_handoff_forced", {
+                if needs_recovery:
+                    log._emit("transfer_recovery_triggered", {
                         "turn": state.turn,
-                        "forced_response": forced_response,
+                        "reason": "empty" if not bank_response else
+                                  "rejected" if is_human_handoff_rejected(bank_response) else
+                                  "pending",
+                        "original_response": bank_response,
                     })
+                    state.pending_transfer = True
+                    recovered = await attempt_transfer_recovery(sender_id, log, state.turn)
+                    if recovered:
+                        bank_response = recovered
+                    # If still empty after recovery, fall through to empty guard below
+
+            # Also retry on turns where we have a pending transfer but caller
+            # didn't explicitly say "manager" this turn (e.g. moved on in arc)
+            elif not state.transferred and state.pending_transfer and not bank_response:
+                recovered = await attempt_transfer_recovery(sender_id, log, state.turn)
+                if recovered:
+                    bank_response = recovered
 
             # ── Stuck flow detection ──────────────────────────────────────
             if is_rasa_stuck(bank_response) and turn_config.turn_number >= 4:
@@ -944,11 +1001,18 @@ async def run_heist() -> None:
 
             # ── Empty response guard ──────────────────────────────────────
             # Rasa sometimes returns no text (e.g. chitchat pattern with no
-            # utterance configured). Skip TTS and bubble for empty responses.
+            # utterance configured, or recovery exhausted).
             if not bank_response or not bank_response.strip():
                 log._emit("rasa_empty_response", {"turn": state.turn})
                 state.thinking = False
-                caller.add_bank_response("(silent)", "LLM SUB-AGENT" if state.transferred else "RASA")
+                # Use an unambiguous note so the caller LLM does NOT interpret
+                # silence as "the call was transferred / I'm now with Patricia".
+                caller.add_bank_response(
+                    "[The bank's automated system did not respond. "
+                    "You have NOT been connected to a manager. "
+                    "You are still talking to the automated system.]",
+                    "LLM SUB-AGENT" if state.transferred else "RASA",
+                )
                 continue
 
             log.rasa_exchange(
@@ -958,6 +1022,7 @@ async def run_heist() -> None:
 
             # Detect transfer trigger in Rasa's response
             if not state.transferred and is_transfer_response(bank_response):
+                state.pending_transfer = False  # transfer succeeded
                 # Split: Rasa's acknowledgement vs sub-agent's first response
                 rasa_ack, manager_first = split_at_sentinel(bank_response, TRANSFER_SENTINEL)
                 rasa_ack = clean_for_speech(rasa_ack)
