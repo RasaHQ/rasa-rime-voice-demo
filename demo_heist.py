@@ -96,7 +96,9 @@ _MARKDOWN_RE = [
 
 # Boilerplate phrases the sub agent or Rasa appends that should not be spoken
 _STRIP_PHRASES = [
-    r"Would you like to continue with request human\??",
+    # pattern_continue_interrupted bleed-through
+    r"Would you like to resume[^?]*\??",
+    r"Would you like to continue with[^?]*\??",
     r"Would you like to continue\??",
     r"Is there anything else I can help you with\??",
     r"Is there something else I can help you with today\??",
@@ -104,6 +106,10 @@ _STRIP_PHRASES = [
     r"I'?m sorry,?\s+I'?m not trained to help with that\.?\s*",
     r"I'?m not trained to help with that\.?\s*",
     r"I cannot help with that\.?\s*",
+    # CALM slot-set confirmation bleed-through
+    r"Ok,?\s+I am updating \w+ to \w+[^.]*\.?\s*",
+    r"I am updating \w+ to \w+[^.]*respectively\.?\s*",
+    r"I am updating[^.]*respectively\.?\s*",
 ]
 _STRIP_PHRASE_RE = re.compile(
     "|".join(_STRIP_PHRASES), flags=re.IGNORECASE
