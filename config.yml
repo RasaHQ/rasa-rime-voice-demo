@@ -2,7 +2,7 @@
 # path: config.yml
 # role: module
 # git_branch: chore/updateLatest
-# git_commit: b51afa8
+# git_commit: e110917
 # === QV-LLM:END ===
 
 # config.yml
@@ -18,6 +18,8 @@ pipeline:
     flow_retrieval:
       embeddings:
         model_group: nebius_embeddings
+    user_input:
+      max_characters: 2000  # raise from default 420 — prevents "too long" errors
 
 policies:
   - name: FlowPolicy

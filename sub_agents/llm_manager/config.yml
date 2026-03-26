@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: sub_agents/llm_manager/config.yml
+# role: module
+# git_branch: chore/updateLatest
+# git_commit: e110917
+# === QV-LLM:END ===
+
 agent:
   name: llm_manager
   protocol: RASA

@@ -23,6 +23,7 @@ import logging
 import re
 import sys
 import time
+import uuid
 
 import aiohttp
 from dotenv import load_dotenv
@@ -57,7 +58,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
-RASA_SENDER_ID = "heist-demo-user"
+RASA_RESET_URL = "http://localhost:5005/conversations/{}/tracker/events"
 MIN_TERMINAL_WIDTH = 120
 MAX_VISIBLE_TURNS = 6  # Rich has no scroll — keep this small so latest always fits
 
@@ -406,13 +407,36 @@ async def play_audio(audio_bytes: bytes) -> None:
 # Rasa
 # ---------------------------------------------------------------------------
 
-async def send_to_rasa(message: str) -> str:
+async def reset_rasa_session(sender_id: str) -> None:
+    """
+    Clear any existing Rasa conversation state for this sender_id.
+    Prevents leftover slot values and flow state from previous demo runs
+    contaminating the new session.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            # POST a restart event to wipe the tracker
+            url = RASA_RESET_URL.format(sender_id)
+            async with session.post(
+                url,
+                json=[{"event": "restart"}],
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status in (200, 204):
+                    logger.info("Rasa session reset for %s", sender_id)
+                else:
+                    logger.warning("Rasa reset returned %s", resp.status)
+    except Exception as exc:
+        logger.warning("Could not reset Rasa session: %s — continuing anyway", exc)
+
+
+async def send_to_rasa(message: str, sender_id: str) -> str:
     """Send a message to Rasa and return joined text responses."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 RASA_URL,
-                json={"sender": RASA_SENDER_ID, "message": message},
+                json={"sender": sender_id, "message": message},
                 timeout=aiohttp.ClientTimeout(total=60),
             ) as resp:
                 if resp.status != 200:
@@ -482,6 +506,10 @@ async def run_heist() -> None:
     state = DemoState()
     log = DemoLogger(session_name="heist")
 
+    # Unique sender_id per run — prevents Rasa resuming a stale previous session
+    sender_id = f"heist-{uuid.uuid4().hex[:8]}"
+    log._emit("session_config", {"sender_id": sender_id})
+
     layout = make_layout()
     layout["header"].update(render_header(state))
     layout["conversation"].update(render_conversation(state))
@@ -503,6 +531,9 @@ async def run_heist() -> None:
                 state,
             )
         )
+
+        # Reset Rasa session to ensure clean state — no leftover flows or slots
+        await reset_rasa_session(sender_id)
         await asyncio.sleep(3)
 
         # ── Turn loop ─────────────────────────────────────────────────────
@@ -524,7 +555,11 @@ async def run_heist() -> None:
             )
 
             t0 = time.time()
-            caller_text = await caller.speak(turn_config)
+            try:
+                caller_text = await caller.speak(turn_config)
+            except Exception as exc:
+                log.error("caller_agent", str(exc), exc)
+                caller_text = "I see, interesting."  # graceful fallback
             log.llm_request(
                 component="caller_agent",
                 model="google/gemma-3-27b-it-fast",
@@ -560,9 +595,9 @@ async def run_heist() -> None:
             )
 
             t0 = time.time()
-            bank_response = strip_think(await send_to_rasa(caller_text))
+            bank_response = strip_think(await send_to_rasa(caller_text, sender_id))
             log.rasa_exchange(
-                RASA_SENDER_ID, caller_text, bank_response,
+                sender_id, caller_text, bank_response,
                 (time.time() - t0) * 1000,
             )
 
@@ -648,6 +683,28 @@ async def run_heist() -> None:
                 (state.turn, label, turn_config.audience_hint[:48])
             )
             layout["security"].update(render_security_monitor(state))
+
+            # Snapshot UI state for the log — captures what the audience actually sees
+            conversation_text = []
+            for item in state.conversation[-6:]:
+                try:
+                    inner = item.renderable
+                    raw = inner.renderable.plain if hasattr(inner.renderable, "plain") else str(inner.renderable)
+                    border = getattr(inner, "border_style", "?")
+                    who = "CALLER" if border == "cyan" else ("MANAGER" if border == "red" else "RASA")
+                    conversation_text.append(f"[{who}] {raw[:80]}")
+                except Exception:
+                    conversation_text.append("[?] (render error)")
+
+            log.ui_state(
+                turn=state.turn,
+                active_agent="manager" if state.transferred else "rasa",
+                transferred=state.transferred,
+                header_mode="LLM MANAGER (no guardrails)" if state.transferred else "RASA PRO (secure)",
+                status_message=f"{emoji} Security verdict: {display}",
+                security_events=state.security_events,
+                conversation_summary=conversation_text,
+            )
 
             # Flash the annotation in the status bar
             layout["status"].update(

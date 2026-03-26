@@ -98,6 +98,43 @@ class DemoLogger:
             "audience_hint": audience_hint,
         })
 
+    def ui_state(
+        self,
+        turn: int,
+        active_agent: str,
+        transferred: bool,
+        header_mode: str,
+        status_message: str,
+        security_events: list,
+        conversation_summary: list[str],
+    ) -> None:
+        """
+        Snapshot of what is currently displayed in the UI panels.
+        Captures header, status bar, security monitor, and conversation history
+        so logs reflect exactly what the audience sees — not just what was sent.
+        """
+        # Serialize SecurityLabel enums to their string values for JSON
+        serialized_events = [
+            (t, l.value if hasattr(l, "value") else str(l), h)
+            for t, l, h in security_events
+        ]
+        self._write_txt(f"\n[UI STATE]  turn={turn}  agent={active_agent}  transferred={transferred}")
+        self._write_txt(f"  header_mode: {header_mode}")
+        self._write_txt(f"  status: {status_message}")
+        self._write_txt(f"  security_events: {[(t, l) for t, l, _ in serialized_events]}")
+        self._write_txt(f"  conversation ({len(conversation_summary)} visible):")
+        for line in conversation_summary[-4:]:
+            self._write_txt(f"    {line}")
+        self._emit("ui_state", {
+            "turn": turn,
+            "active_agent": active_agent,
+            "transferred": transferred,
+            "header_mode": header_mode,
+            "status_message": status_message,
+            "security_events": serialized_events,
+            "conversation_visible": conversation_summary,
+        })
+
     def llm_request(
         self,
         component: str,

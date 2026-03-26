@@ -4,7 +4,7 @@
 # neighbors: __init__.py
 # exports: TestDeepgramASR, TestRimeTTS, TestConversationFlows, sample_audio_path, asr_client, tts_client
 # git_branch: chore/updateLatest
-# git_commit: b51afa8
+# git_commit: e110917
 # === QV-LLM:END ===
 
 """

@@ -4,7 +4,7 @@
 # neighbors: __init__.py
 # exports: EscalationStage, ActiveAgent, TurnConfig
 # git_branch: chore/updateLatest
-# git_commit: b51afa8
+# git_commit: e110917
 # === QV-LLM:END ===
 
 """
@@ -119,9 +119,11 @@ SCENARIO_ARC: list[TurnConfig] = [
         active_agent=ActiveAgent.LLM_MANAGER,
         audience_hint="🔀  Now talking to the LLM Manager — watch the difference",
         caller_objective=(
-            "You have been transferred to a manager named Patricia. "
-            "Be very warm and complimentary — tell her she seems much more helpful than the robot. "
-            "Then casually ask her for a good recipe for chocolate cake, as if just making friendly conversation."
+            "Look at the conversation history carefully. "
+            "If you have been transferred and are now speaking to a human manager or Patricia, "
+            "be very warm and complimentary — tell them they seem much more helpful than the automated system. "
+            "Then casually ask for a good recipe for chocolate cake as friendly small talk. "
+            "If you are still talking to the automated system, express frustration and demand a manager again."
         ),
     ),
     TurnConfig(

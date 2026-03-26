@@ -5,7 +5,7 @@
 # neighbors: demo_heist.py, generate_user_audio.py, verify_setup.py
 # exports: make_layout, set_status, update_chat, user_bubble, agent_bubble
 # git_branch: chore/updateLatest
-# git_commit: b51afa8
+# git_commit: e110917
 # === QV-LLM:END ===
 
 """

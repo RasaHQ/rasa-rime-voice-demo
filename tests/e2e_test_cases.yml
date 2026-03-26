@@ -2,7 +2,7 @@
 # path: tests/e2e_test_cases.yml
 # role: module
 # git_branch: chore/updateLatest
-# git_commit: b51afa8
+# git_commit: e110917
 # === QV-LLM:END ===
 
 # tests/e2e_test_cases.yml

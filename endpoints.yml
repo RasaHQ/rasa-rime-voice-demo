@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: endpoints.yml
+# role: module
+# git_branch: chore/updateLatest
+# git_commit: e110917
+# === QV-LLM:END ===
+
 # endpoints.yml
 
 # ==============================================================================
