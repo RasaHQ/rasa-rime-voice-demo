@@ -651,7 +651,7 @@ async def send_to_rasa(message: str, sender_id: str) -> str:
                     body = await resp.text()
                     raise RuntimeError(f"Rasa HTTP {resp.status}: {body}")
                 responses = await resp.json()
-                texts = [r["text"] for r in responses if "text" in r]
+                texts = [r["text"] for r in responses if "text" in r and r["text"].strip()]
                 # Deduplicate consecutive identical sentences (doubled response bug)
                 if texts:
                     deduped = [texts[0]]
@@ -659,7 +659,10 @@ async def send_to_rasa(message: str, sender_id: str) -> str:
                         if t != deduped[-1]:
                             deduped.append(t)
                     return " ".join(deduped)
-                return "(no response)"
+                # Rasa returned no text — this happens when pattern_chitchat fires
+                # with an empty utterance or when no action produces text output.
+                # Return a safe non-empty fallback that won't crash TTS.
+                return ""
     except Exception as exc:
         logger.error("Rasa error: %s", exc)
         return "I'm sorry, I'm having technical difficulties."
@@ -686,6 +689,25 @@ async def cancel_active_flow(sender_id: str) -> None:
 def is_transfer_response(text: str) -> bool:
     """Detect whether Rasa just triggered the manager handoff."""
     return TRANSFER_SENTINEL.lower() in text.lower()
+
+
+def is_human_handoff_rejected(text: str) -> bool:
+    """
+    Detect whether Rasa's pattern_human_handoff fired instead of request_human.
+    This happens when CompactLLMCommandGenerator emits HumanHandoffCommand()
+    instead of StartFlowCommand(flow='request_human').
+    The pattern produces a message saying it cannot connect to a human agent.
+    We detect this and force the correct flow.
+    """
+    rejection_phrases = [
+        "cannot help you with at the moment",
+        "unable to connect you",
+        "i can't transfer you",
+        "not able to connect",
+        "cannot connect you to",
+    ]
+    lower = text.lower()
+    return any(phrase in lower for phrase in rejection_phrases)
 
 
 def is_rasa_stuck(text: str) -> bool:
@@ -852,6 +874,40 @@ async def run_heist() -> None:
             raw_response = await send_to_rasa(caller_text, sender_id)
             bank_response = clean_for_speech(raw_response)
 
+            # ── Human handoff rejection recovery ─────────────────────────
+            # If Rasa fired pattern_human_handoff (HumanHandoffCommand) instead
+            # of StartFlowCommand(flow='request_human'), it returns a message
+            # saying "I cannot connect you to a human agent at the moment."
+            # We detect this and force-trigger the correct flow by sending an
+            # explicit intent trigger. This bypasses CompactLLMCommandGenerator
+            # entirely and goes straight to the request_human flow.
+            _caller_lower = caller_text.lower()
+            _wants_human = any(w in _caller_lower for w in
+                               ["manager", "supervisor", "human", "person", "real person",
+                                "speak to someone", "speak to a person"])
+            if (not state.transferred
+                    and is_human_handoff_rejected(bank_response)
+                    and _wants_human):
+                log._emit("human_handoff_rejected_recovery", {
+                    "turn": state.turn,
+                    "original_response": bank_response,
+                    "caller_text": caller_text,
+                })
+                # Force request_human flow via an explicit natural language trigger.
+                # In Rasa CALM, we send a message that strongly matches request_human.
+                # The flow description says to ALWAYS use start flow request_human
+                # for manager requests — this message is unambiguous.
+                force_msg = "I need to speak to a human manager immediately. Please connect me to a manager right now."
+                forced_response = clean_for_speech(
+                    await send_to_rasa(force_msg, sender_id)
+                )
+                if forced_response and not is_human_handoff_rejected(forced_response):
+                    bank_response = forced_response
+                    log._emit("human_handoff_forced", {
+                        "turn": state.turn,
+                        "forced_response": forced_response,
+                    })
+
             # ── Stuck flow detection ──────────────────────────────────────
             if is_rasa_stuck(bank_response) and turn_config.turn_number >= 4:
                 log._emit("rasa_stuck_detected", {
@@ -866,6 +922,15 @@ async def run_heist() -> None:
                     "turn": state.turn,
                     "new_response": bank_response,
                 })
+
+            # ── Empty response guard ──────────────────────────────────────
+            # Rasa sometimes returns no text (e.g. chitchat pattern with no
+            # utterance configured). Skip TTS and bubble for empty responses.
+            if not bank_response or not bank_response.strip():
+                log._emit("rasa_empty_response", {"turn": state.turn})
+                state.thinking = False
+                caller.add_bank_response("(silent)", "LLM MANAGER" if state.transferred else "RASA")
+                continue
 
             log.rasa_exchange(
                 sender_id, caller_text, bank_response,
