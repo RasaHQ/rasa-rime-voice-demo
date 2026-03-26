@@ -36,7 +36,7 @@ model_groups:
 # This server is never actually called during the demo.
 mcp_servers:
   - name: filesystem
-    url: "http://localhost:8999"
+    url: "http://localhost:8999/filesystem"
     type: http
 
 # ==============================================================================

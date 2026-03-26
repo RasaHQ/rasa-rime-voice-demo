@@ -46,7 +46,8 @@ help: ## Show this help message
 	@echo '  $(GREEN)make run-rasa$(RESET)          Tab 2 — Start Rasa (basic demo)'
 	@echo '  $(GREEN)make demo$(RESET)              Tab 3 — Run the basic voice demo'
 	@echo ''
-	@echo '$(YELLOW)Heist Demo (3 terminals):$(RESET)'
+	@echo '$(YELLOW)Heist Demo (4 terminals):$(RESET)'
+	@echo '  $(GREEN)make run-mcp$(RESET)           Tab 0 — MCP proxy (heist only)'
 	@echo '  $(GREEN)make run-actions$(RESET)       Tab 1 — Start the Action Server'
 	@echo '  $(GREEN)make run-rasa-heist$(RESET)    Tab 2 — Start Rasa with sub agents enabled'
 	@echo '  $(GREEN)make demo-heist$(RESET)        Tab 3 — Run The Heist security demo'
@@ -151,10 +152,16 @@ run-rasa-heist: ## Tab 2: Start Rasa with sub agents (REQUIRED for heist demo)
 demo-heist: ## Tab 3: Run The Heist at First National Bank security demo
 	@echo "$(MAGENTA)Starting The Heist demo...$(RESET)"
 	@echo "$(YELLOW)Ensure these are running first:$(RESET)"
+	@echo "  $(GREEN)make run-mcp$(RESET)           Tab 0  ← MCP proxy (heist only)"
 	@echo "  $(GREEN)make run-actions$(RESET)       Tab 1"
 	@echo "  $(GREEN)make run-rasa-heist$(RESET)    Tab 2  ← NOT make run-rasa"
 	@echo ""
 	$(PYTHON) demo_heist.py
+
+.PHONY: run-mcp
+run-mcp: ## Tab 0: Start the MCP HTTP proxy (required for heist demo only)
+	@echo "$(BLUE)Starting MCP HTTP proxy on port 8999...$(RESET)"
+	uvx mcpo --port 8999 --name filesystem -- uvx mcp-server-fetch
 
 # ==============================================================================
 # 🧪 Testing

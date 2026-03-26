@@ -230,6 +230,20 @@ async def check_action_server() -> bool:
         hint("Run: make run-actions  (in a separate terminal)")
         return False
 
+async def check_mcp_server() -> bool:
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "http://localhost:8999/mcp",
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as resp:
+                ok("MCP server is running (port 8999)")
+                return True
+    except Exception:
+        warn("MCP server not running — start it before the heist demo")
+        hint("Run: make run-mcp  (in a separate terminal)")
+        return False
 
 # ---------------------------------------------------------------------------
 # Main runner
@@ -315,6 +329,9 @@ async def run_checks() -> int:
     if not rasa_running:
         warnings += 1
     if not actions_running:
+        warnings += 1
+    mcp_running = await check_mcp_server()
+    if not mcp_running:
         warnings += 1
 
     # ── Summary ──────────────────────────────────────────────────────────
