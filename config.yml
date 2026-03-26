@@ -1,10 +1,3 @@
-# === QV-LLM:BEGIN ===
-# path: config.yml
-# role: module
-# git_branch: chore/updateLatest
-# git_commit: fcce488
-# === QV-LLM:END ===
-
 # config.yml
 recipe: default.v1
 language: en
@@ -14,11 +7,10 @@ assistant_id: voice_banking_assistant
 pipeline:
   - name: CompactLLMCommandGenerator
     llm:
-      provider: openai
-      model: gpt-4o-2024-11-20
-      temperature: 0.1
-      max_tokens: 256
-      timeout: 10
+      model_group: nebius_llm
+    flow_retrieval:
+      embeddings:
+        model_group: nebius_embeddings
 
 policies:
   - name: FlowPolicy

@@ -359,3 +359,5 @@ System Volume Information/
 /quack-core/path/
 
 tests/audio/
+
+.rasa/

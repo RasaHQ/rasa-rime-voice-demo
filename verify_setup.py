@@ -239,13 +239,13 @@ async def run_checks() -> int:
     rasa_ok = check_env_var("RASA_LICENSE", "Rasa Pro License")
     dg_key = os.getenv("DEEPGRAM_API_KEY")
     rime_key = os.getenv("RIME_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
+    openai_key = os.getenv("NEBIUS_API_KEY")
 
     if not check_env_var("DEEPGRAM_API_KEY", "Deepgram API Key"):
         errors += 1
     if not check_env_var("RIME_API_KEY", "Rime API Key"):
         errors += 1
-    if not check_env_var("OPENAI_API_KEY", "OpenAI API Key"):
+    if not check_env_var("NEBIUS_API_KEY", "Nebius API Key"):
         errors += 1
     if not rasa_ok:
         errors += 1

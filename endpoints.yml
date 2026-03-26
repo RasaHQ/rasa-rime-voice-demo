@@ -18,18 +18,39 @@ action_endpoint:
   # token: "your-secret-token"
 
 # ==============================================================================
+# LLM Model Groups
+# ==============================================================================
+model_groups:
+  - id: nebius_llm
+    models:
+      - provider: self-hosted
+        model: MiniMaxAI/MiniMax-M2.5
+        api_base: "https://api.tokenfactory.us-central1.nebius.com/v1"
+        api_key: ${NEBIUS_API_KEY}
+        temperature: 0.1
+        max_tokens: 256
+        timeout: 30
+
+  - id: nebius_embeddings
+    models:
+      - provider: openai
+        model: Qwen/Qwen3-Embedding-8B
+        api_base: "https://api.tokenfactory.nebius.com/v1"
+        api_key: ${NEBIUS_API_KEY}
+
+# ==============================================================================
 # Tracing (Optional - for debugging and monitoring)
 # ==============================================================================
 # Distributed tracing helps you understand how requests flow through your assistant
 # Uncomment one of the following configurations to enable tracing
 
 # Option 1: Jaeger Backend (recommended for local development)
-tracing:
-  type: jaeger
-  host: localhost
-  port: 4317
-  service_name: voice-assistant
-  sync_export: false
+#tracing:
+#  type: jaeger
+#  host: localhost
+#  port: 4317
+#  service_name: voice-assistant
+#  sync_export: false
 
 # Option 2: OpenTelemetry Collector (OTLP) - for production
 # tracing:
