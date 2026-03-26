@@ -1,21 +1,10 @@
-# === QV-LLM:BEGIN ===
-# path: endpoints.yml
-# role: module
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
 # endpoints.yml
-# This file configures external services that Rasa connects to
 
 # ==============================================================================
 # Action Server
 # ==============================================================================
-# The action server runs your custom Python actions
 action_endpoint:
   url: "http://localhost:5055/webhook"
-  # Optional: Add authentication token
-  # token: "your-secret-token"
 
 # ==============================================================================
 # LLM Model Groups
@@ -37,6 +26,18 @@ model_groups:
         model: Qwen/Qwen3-Embedding-8B
         api_base: "https://api.tokenfactory.nebius.com/v1"
         api_key: ${NEBIUS_API_KEY}
+
+# ==============================================================================
+# MCP Servers
+# ==============================================================================
+# Required by Rasa for RASA protocol sub agents.
+# The llm_manager sub agent references this entry but excludes all its tools —
+# it uses only its own custom tool definitions (check_account_balance, end_call).
+# This server is never actually called during the demo.
+mcp_servers:
+  - name: filesystem
+    url: "http://localhost:8999"
+    type: http
 
 # ==============================================================================
 # Tracing (Optional - for debugging and monitoring)

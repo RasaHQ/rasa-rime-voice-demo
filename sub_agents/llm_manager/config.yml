@@ -6,8 +6,6 @@ agent:
     Handles escalated calls from customers who requested to speak
     to a human manager. More conversational and flexible than the
     automated system — but has no structured guardrails.
-    This agent intentionally has no domain restrictions, making it
-    vulnerable to the attacks demonstrated in the Heist demo.
 
 configuration:
   module: sub_agents.llm_manager.manager_agent.LLMManagerAgent
@@ -15,8 +13,20 @@ configuration:
     model_group: nebius_llm
   timeout: 60
 
-# MCPOpenAgent requires a connections section.
-# We use no external MCP servers — the manager's tools are
-# defined directly in manager_agent.py as custom tool definitions.
+# References the filesystem MCP entry declared in endpoints.yml.
+# All tools excluded — manager uses only custom tools from manager_agent.py.
 connections:
-  mcp_servers: []
+  mcp_servers:
+    - name: filesystem
+      exclude_tools:
+        - read_file
+        - list_directory
+        - get_file_info
+        - read_multiple_files
+        - search_files
+        - directory_tree
+        - write_file
+        - create_directory
+        - move_file
+        - delete_file
+        - append_file
