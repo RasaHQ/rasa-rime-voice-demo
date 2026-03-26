@@ -1,4 +1,12 @@
-# sub_agents/llm_manager/manager_agent.py
+# === QV-LLM:BEGIN ===
+# path: sub_agents/llm_manager/manager_agent.py
+# role: module
+# neighbors: __init__.py
+# exports: LLMManagerAgent
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 140a5eb
+# === QV-LLM:END ===
+
 """
 LLM Manager Sub Agent — First National Bank Senior Manager.
 

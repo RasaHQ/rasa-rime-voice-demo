@@ -1,10 +1,10 @@
 # === QV-LLM:BEGIN ===
 # path: services/tts_service.py
 # role: module
-# neighbors: __init__.py, asr_service.py, demo_logger.py
+# neighbors: __init__.py, asr_service.py, demo_logger.py, speechmatics_service.py
 # exports: RimeTTSError, RimeTTS
-# git_branch: chore/updateLatest
-# git_commit: e110917
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 140a5eb
 # === QV-LLM:END ===
 
 """

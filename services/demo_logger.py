@@ -1,4 +1,12 @@
-# services/demo_logger.py
+# === QV-LLM:BEGIN ===
+# path: services/demo_logger.py
+# role: module
+# neighbors: __init__.py, asr_service.py, speechmatics_service.py, tts_service.py
+# exports: DemoLogger
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 140a5eb
+# === QV-LLM:END ===
+
 """
 Demo Logger — Structured session log for debugging and sharing.
 

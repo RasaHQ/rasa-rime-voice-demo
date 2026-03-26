@@ -1,65 +1,51 @@
-# === QV-LLM:BEGIN ===
-# path: pyproject.toml
-# role: module
-# git_branch: chore/updateLatest
-# git_commit: e110917
-# === QV-LLM:END ===
-
 # pyproject.toml
 [project]
-name = "rasa-rime-voice-demo"
-version = "2.0.0"
-description = "Low-latency voice orchestration with Rasa Pro, Rime TTS, and Deepgram ASR"
+name = "rasa-voice-demo"
+version = "3.0.0"
+description = "Low-latency voice orchestration with Rasa Pro and Speechmatics TTS/ASR"
 requires-python = ">=3.10,<3.12"
 dependencies = [
     # Rasa
     "rasa-pro>=3.9.0",
     "rasa-sdk>=3.8.0",
-
     # Networking & async
     "aiohttp>=3.9.0",
-
+    # Speechmatics — TTS + ASR (replaces Rime TTS and Deepgram ASR)
+    "speechmatics-python>=1.11.0",
+    "speechmatics-tts>=0.1.0",
     # Audio
     "pydub>=0.25.1",
     "simpleaudio>=1.0.4",
-
     # UI & utilities
     "rich>=13.0.0",
     "python-dotenv>=1.0.0",
 ]
-
 [project.optional-dependencies]
 test = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
 ]
-
 dev = [
     "ruff>=0.1.0",
 ]
-
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
-
 [tool.setuptools]
 # All Python packages in this project.
 # sub_agents is source code (Rasa sub agent modules), not data.
 packages = ["actions", "services", "agents", "scenario", "sub_agents", "sub_agents.llm_manager"]
-
 [tool.uv]
 # uv manages the virtualenv
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
-    "integration: marks tests that require live services (Deepgram, Rime, Rasa)",
+    "integration: marks tests that require live services (Speechmatics, Rasa)",
 ]
 addopts = ["-v", "--tb=short"]
-
 [tool.ruff]
 line-length = 88
 target-version = "py310"

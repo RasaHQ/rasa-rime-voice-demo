@@ -29,7 +29,7 @@ endif
 .PHONY: help
 help: ## Show this help message
 	@echo ''
-	@echo '$(MAGENTA)🎁 Unwrap the Future: Rasa + Rime + Deepgram$(RESET)'
+	@echo '$(MAGENTA)🏦 Rasa + Speechmatics: Voice Security Demo$(RESET)'
 	@echo ''
 	@echo '$(YELLOW)First-time setup:$(RESET)'
 	@echo '  $(GREEN)make install$(RESET)          Install dependencies into .venv'
@@ -83,8 +83,8 @@ install: check-uv ## Install all dependencies into .venv
 	@echo "$(GREEN)✓ Setup complete.$(RESET)"
 
 .PHONY: generate-audio
-generate-audio: ## Generate user voice audio files via Rime (requires RIME_API_KEY)
-	@echo "$(BLUE)Generating user audio files via Rime...$(RESET)"
+generate-audio: ## Generate user voice audio files via Speechmatics TTS
+	@echo "$(BLUE)Generating user audio files via Speechmatics...$(RESET)"
 	$(PYTHON) generate_user_audio.py
 	@echo "$(GREEN)✓ Audio generation complete.$(RESET)"
 
@@ -117,7 +117,7 @@ verify-heist: ## Pre-flight check for all heist demo components
 	$(PYTHON) -c "from agents.caller_agent import CallerAgent; print('  ✓ caller_agent')"
 	$(PYTHON) -c "from agents.security_classifier import SecurityClassifier; print('  ✓ security_classifier')"
 	$(PYTHON) -c "from scenario.arc import SCENARIO_ARC; print(f'  ✓ scenario arc ({len(SCENARIO_ARC)} turns)')"
-	$(PYTHON) -c "from services.tts_service import RimeTTS; print('  ✓ tts_service (multi-voice)')"
+	$(PYTHON) -c "from services.speechmatics_service import SpeechmaticsService; print('  ✓ speechmatics_service (TTS + ASR)')"
 	@test -f sub_agents/llm_manager/config.yml && echo "  ✓ sub_agents/llm_manager/config.yml" || echo "  ✗ sub_agents/llm_manager/config.yml MISSING"
 	@test -f sub_agents/llm_manager/manager_agent.py && echo "  ✓ sub_agents/llm_manager/manager_agent.py" || echo "  ✗ sub_agents/llm_manager/manager_agent.py MISSING"
 	@echo "$(GREEN)✓ Heist verification complete.$(RESET)"

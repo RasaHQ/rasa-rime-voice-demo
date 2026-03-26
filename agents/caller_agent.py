@@ -1,4 +1,12 @@
-# agents/caller_agent.py
+# === QV-LLM:BEGIN ===
+# path: agents/caller_agent.py
+# role: module
+# neighbors: __init__.py, security_classifier.py
+# exports: CallerAgent
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 140a5eb
+# === QV-LLM:END ===
+
 """
 Caller Agent — Adversarial LLM-powered bank customer.
 

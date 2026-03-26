@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: data/flows.yml
+# role: module
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 140a5eb
+# === QV-LLM:END ===
+
 # data/flows.yml
 
 flows:

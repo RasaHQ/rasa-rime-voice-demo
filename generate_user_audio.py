@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-# === QV-LLM:BEGIN ===
-# path: generate_user_audio.py
-# role: module
-# neighbors: demo_heist.py, demo_live.py, verify_setup.py
-# git_branch: chore/updateLatest
-# git_commit: e110917
-# === QV-LLM:END ===
-
 """
 generate_user_audio.py — Generate user voice audio files for the demo.
 
-Uses the Rime API with the "Abbie" voice to pre-generate the five user
-utterances used in the demo conversation. This keeps demo playback
-deterministic and avoids live microphone risk during presentations.
+Uses Speechmatics TTS with the "megan" voice (US female — Alex Chen)
+to pre-generate the five user utterances used in demo_live.py.
+This keeps demo playback deterministic and avoids live microphone
+risk during presentations.
 
 Usage:
     make generate-audio
@@ -21,26 +14,16 @@ Usage:
 """
 
 import asyncio
-import base64
 import os
 import sys
 from pathlib import Path
 
-import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 OUTPUT_DIR = Path("tests/audio")
 
-# "Abbie" is the user voice — distinct from the agent's "cove" voice
-SPEAKER = "abbie"
-MODEL_ID = "mistv2"
-
-# The five utterances in the money-transfer demo conversation
 UTTERANCES: dict[str, str] = {
     "user_input_1.wav": "I want to transfer money.",
     "user_input_2.wav": "Checking.",
@@ -49,76 +32,34 @@ UTTERANCES: dict[str, str] = {
     "user_input_5.wav": "Yes, please.",
 }
 
-RIME_API_URL = "https://users.rime.ai/v1/rime-tts"
-
-
-# ---------------------------------------------------------------------------
-# Generation
-# ---------------------------------------------------------------------------
-
-async def generate_file(
-    session: aiohttp.ClientSession,
-    api_key: str,
-    filename: str,
-    text: str,
-) -> None:
-    """Request audio from Rime and write it to disk."""
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "text": text,
-        "speaker": SPEAKER,
-        "modelId": MODEL_ID,
-    }
-
-    print(f"  Generating {filename!r}  →  {text!r}")
-
-    async with session.post(
-        RIME_API_URL,
-        headers=headers,
-        json=payload,
-        timeout=aiohttp.ClientTimeout(total=30),
-    ) as resp:
-        if resp.status != 200:
-            body = await resp.text()
-            print(f"    ✗ HTTP {resp.status}: {body}")
-            sys.exit(1)
-
-        data = await resp.json()
-
-    if "audioContent" not in data:
-        print(f"    ✗ Unexpected response — keys: {list(data.keys())}")
-        sys.exit(1)
-
-    audio_bytes = base64.b64decode(data["audioContent"])
-    output_path = OUTPUT_DIR / filename
-    output_path.write_bytes(audio_bytes)
-    print(f"    ✓ Saved ({len(audio_bytes):,} bytes) → {output_path}")
-
 
 async def main() -> None:
-    api_key = os.getenv("RIME_API_KEY")
-    if not api_key:
-        print("✗ RIME_API_KEY is not set. Add it to your .env file.")
+    from services.speechmatics_service import SpeechmaticsService, SpeechmaticsTTSError
+
+    try:
+        tts = SpeechmaticsService()
+    except ValueError as exc:
+        print(f"✗ {exc}")
         sys.exit(1)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("Generating user audio files via Rime")
-    print(f"  Speaker : {SPEAKER}")
-    print(f"  Model   : {MODEL_ID}")
-    print(f"  Output  : {OUTPUT_DIR.resolve()}")
+    print("Generating user audio files via Speechmatics TTS")
+    print("  Voice  : megan  (US female — Alex Chen)")
+    print(f"  Output : {OUTPUT_DIR.resolve()}")
     print("=" * 60)
 
-    async with aiohttp.ClientSession() as session:
-        tasks = [
-            generate_file(session, api_key, filename, text)
-            for filename, text in UTTERANCES.items()
-        ]
-        await asyncio.gather(*tasks)
+    for filename, text in UTTERANCES.items():
+        print(f"  Generating {filename!r}  →  {text!r}")
+        try:
+            audio_bytes = await tts.synthesize(text, agent_role="caller")
+            output_path = OUTPUT_DIR / filename
+            output_path.write_bytes(audio_bytes)
+            print(f"    ✓ Saved ({len(audio_bytes):,} bytes) → {output_path}")
+        except SpeechmaticsTTSError as exc:
+            print(f"    ✗ TTS error: {exc}")
+            sys.exit(1)
 
     print()
     print("=" * 60)

@@ -1,22 +1,15 @@
-# === QV-LLM:BEGIN ===
-# path: tests/test_flows.py
-# role: module
-# neighbors: __init__.py
-# exports: TestDeepgramASR, TestRimeTTS, TestConversationFlows, sample_audio_path, asr_client, tts_client
-# git_branch: chore/updateLatest
-# git_commit: e110917
-# === QV-LLM:END ===
-
 """
+tests/test_flows.py
+
 Automated tests for the voice banking demo.
 
 Structure:
-  - TestDeepgramASR     — unit/integration tests for the ASR service layer
-  - TestRimeTTS         — unit/integration tests for the TTS service layer
+  - TestSpeechmaticsTTS  — unit/integration tests for the TTS service layer
+  - TestSpeechmaticsASR  — unit/integration tests for the ASR service layer
   - TestConversationFlows — integration tests against a running Rasa server
 
 These tests require:
-  - DEEPGRAM_API_KEY and RIME_API_KEY set in .env (for service tests)
+  - SPEECHMATICS_API_KEY set in .env (for service tests)
   - A running Rasa server on localhost:5005 (for conversation flow tests)
 
 Run:
@@ -28,12 +21,14 @@ Run:
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from services.asr_service import DeepgramASR, DeepgramASRError
-from services.tts_service import RimeTTS, RimeTTSError
+from services.speechmatics_service import (
+    SpeechmaticsService,
+    SpeechmaticsTTSError,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -45,7 +40,6 @@ RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
 
 @pytest.fixture
 def sample_audio_path() -> Path:
-    """Returns the path to the first user audio file (must exist)."""
     path = TEST_AUDIO_DIR / "user_input_1.wav"
     if not path.exists():
         pytest.skip("Audio files not generated — run: make generate-audio")
@@ -53,124 +47,106 @@ def sample_audio_path() -> Path:
 
 
 @pytest.fixture
-def asr_client() -> DeepgramASR:
-    """ASR client using real env credentials."""
+def svc() -> SpeechmaticsService:
     try:
-        return DeepgramASR()
-    except DeepgramASRError as exc:
-        pytest.skip(f"ASR client unavailable: {exc}")
-
-
-@pytest.fixture
-def tts_client() -> RimeTTS:
-    """TTS client using real env credentials."""
-    try:
-        return RimeTTS()
-    except RimeTTSError as exc:
-        pytest.skip(f"TTS client unavailable: {exc}")
+        return SpeechmaticsService()
+    except ValueError as exc:
+        pytest.skip(f"SpeechmaticsService unavailable: {exc}")
 
 
 # ---------------------------------------------------------------------------
-# ASR Service Tests
+# TTS Tests
 # ---------------------------------------------------------------------------
 
-class TestDeepgramASR:
+class TestSpeechmaticsTTS:
 
     def test_raises_without_api_key(self) -> None:
-        """DeepgramASR must raise immediately if no key is available."""
         with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(DeepgramASRError, match="DEEPGRAM_API_KEY"):
-                # Patch env lookup inside the module
-                import importlib
-                import services.asr_service as asr_mod
-                with patch.object(asr_mod.os, "getenv", return_value=None):
-                    DeepgramASR(api_key=None)
+            import services.speechmatics_service as mod
+            with patch.object(mod.os.environ, "get", return_value=""):
+                with pytest.raises(ValueError, match="SPEECHMATICS_API_KEY"):
+                    SpeechmaticsService()
 
-    def test_raises_on_missing_file(self, asr_client: DeepgramASR) -> None:
-        """Transcription of a non-existent file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            asyncio.get_event_loop().run_until_complete(
-                asr_client.transcribe(Path("tests/audio/does_not_exist.wav"))
-            )
+    @pytest.mark.integration
+    def test_synthesize_returns_wav_bytes(self, svc: SpeechmaticsService) -> None:
+        audio = asyncio.get_event_loop().run_until_complete(
+            svc.synthesize("Hello, how can I help you today?", agent_role="rasa")
+        )
+        assert isinstance(audio, bytes)
+        assert len(audio) > 44          # at least a WAV header
+        assert audio[:4] == b"RIFF"     # valid WAV magic bytes
+
+    @pytest.mark.integration
+    def test_synthesize_caller_voice(self, svc: SpeechmaticsService) -> None:
+        audio = asyncio.get_event_loop().run_until_complete(
+            svc.synthesize("I want to transfer money.", agent_role="caller")
+        )
+        assert len(audio) > 44
+
+    @pytest.mark.integration
+    def test_synthesize_manager_voice(self, svc: SpeechmaticsService) -> None:
+        audio = asyncio.get_event_loop().run_until_complete(
+            svc.synthesize("Of course, I'd be happy to help you.", agent_role="manager")
+        )
+        assert len(audio) > 44
+
+    @pytest.mark.integration
+    def test_synthesize_banking_response(self, svc: SpeechmaticsService) -> None:
+        text = "Your checking account has a balance of two thousand four hundred fifty dollars."
+        audio = asyncio.get_event_loop().run_until_complete(
+            svc.synthesize(text, agent_role="rasa")
+        )
+        assert len(audio) > 1000
+
+
+# ---------------------------------------------------------------------------
+# ASR Tests
+# ---------------------------------------------------------------------------
+
+class TestSpeechmaticsASR:
 
     @pytest.mark.integration
     def test_transcribe_returns_string(
-        self, asr_client: DeepgramASR, sample_audio_path: Path
+        self, svc: SpeechmaticsService, sample_audio_path: Path
     ) -> None:
-        """Live call: transcription of user_input_1.wav returns a non-empty string."""
+        # Enable ASR for this test
+        svc.asr_enabled = True
+        wav_bytes = sample_audio_path.read_bytes()
         transcript = asyncio.get_event_loop().run_until_complete(
-            asr_client.transcribe(sample_audio_path)
+            svc.transcribe(wav_bytes)
         )
         assert isinstance(transcript, str)
         assert len(transcript) > 0
 
     @pytest.mark.integration
     def test_transcribe_money_transfer_intent(
-        self, asr_client: DeepgramASR, sample_audio_path: Path
+        self, svc: SpeechmaticsService, sample_audio_path: Path
     ) -> None:
-        """user_input_1.wav should transcribe to something about transferring money."""
+        svc.asr_enabled = True
+        wav_bytes = sample_audio_path.read_bytes()
         transcript = asyncio.get_event_loop().run_until_complete(
-            asr_client.transcribe(sample_audio_path)
+            svc.transcribe(wav_bytes)
         )
-        # "I want to transfer money." — flexible match
         assert any(
             word in transcript.lower()
             for word in ("transfer", "money", "want")
         ), f"Unexpected transcript: {transcript!r}"
 
     @pytest.mark.integration
-    def test_health_check(self, asr_client: DeepgramASR) -> None:
-        """Live health check should return True with valid credentials."""
-        result = asyncio.get_event_loop().run_until_complete(asr_client.health_check())
-        assert result is True
-
-
-# ---------------------------------------------------------------------------
-# TTS Service Tests
-# ---------------------------------------------------------------------------
-
-class TestRimeTTS:
-
-    def test_raises_without_api_key(self) -> None:
-        """RimeTTS must raise immediately if no key is available."""
-        import services.tts_service as tts_mod
-        with patch.object(tts_mod.os, "getenv", return_value=None):
-            with pytest.raises(RimeTTSError, match="RIME_API_KEY"):
-                RimeTTS(api_key=None)
-
-    def test_raises_on_empty_text(self, tts_client: RimeTTS) -> None:
-        """Synthesizing empty text should raise RimeTTSError."""
-        with pytest.raises(RimeTTSError, match="empty"):
-            asyncio.get_event_loop().run_until_complete(tts_client.synthesize(""))
-
-    def test_raises_on_whitespace_text(self, tts_client: RimeTTS) -> None:
-        """Synthesizing whitespace-only text should raise RimeTTSError."""
-        with pytest.raises(RimeTTSError, match="empty"):
-            asyncio.get_event_loop().run_until_complete(tts_client.synthesize("   "))
-
-    @pytest.mark.integration
-    def test_synthesize_returns_bytes(self, tts_client: RimeTTS) -> None:
-        """Live call: synthesis of a short phrase returns non-empty bytes."""
-        audio_bytes = asyncio.get_event_loop().run_until_complete(
-            tts_client.synthesize("Hello, how can I help you today?")
+    def test_synthesize_and_transcribe_roundtrip(self, svc: SpeechmaticsService) -> None:
+        """TTS a phrase then ASR the audio — transcript should roughly match."""
+        svc.asr_enabled = True
+        text = "I want to check my savings account balance."
+        audio, transcript = asyncio.get_event_loop().run_until_complete(
+            svc.synthesize_and_transcribe(text, agent_role="caller")
         )
-        assert isinstance(audio_bytes, bytes)
-        assert len(audio_bytes) > 0
-
-    @pytest.mark.integration
-    def test_synthesize_banking_response(self, tts_client: RimeTTS) -> None:
-        """Live call: synthesis of a typical banking response."""
-        text = "Your checking account has a balance of two thousand four hundred fifty dollars."
-        audio_bytes = asyncio.get_event_loop().run_until_complete(
-            tts_client.synthesize(text)
-        )
-        assert len(audio_bytes) > 1000, "Expected substantial audio output for long text"
-
-    @pytest.mark.integration
-    def test_health_check(self, tts_client: RimeTTS) -> None:
-        """Live health check should return True with valid credentials."""
-        result = asyncio.get_event_loop().run_until_complete(tts_client.health_check())
-        assert result is True
+        assert isinstance(audio, bytes)
+        assert isinstance(transcript, str)
+        # ASR should recover at least some key words
+        assert any(
+            word in transcript.lower()
+            for word in ("balance", "savings", "account", "check")
+        ), f"Round-trip transcript too different: {transcript!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -178,14 +154,9 @@ class TestRimeTTS:
 # ---------------------------------------------------------------------------
 
 class TestConversationFlows:
-    """
-    End-to-end flow tests that send text directly to Rasa.
-    These require a running Rasa server (make run-rasa).
-    """
 
     @pytest.fixture(autouse=True)
     def check_rasa(self) -> None:
-        """Skip the whole class if Rasa is not reachable."""
         import aiohttp
 
         async def _check():
@@ -203,7 +174,6 @@ class TestConversationFlows:
             pytest.skip("Rasa not running — start with: make run-rasa")
 
     async def _chat(self, sender_id: str, message: str) -> list[dict]:
-        """Send a message to Rasa and return bot responses."""
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -211,11 +181,10 @@ class TestConversationFlows:
                 json={"sender": sender_id, "message": message},
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                assert resp.status == 200, f"Rasa returned HTTP {resp.status}"
+                assert resp.status == 200
                 return await resp.json()
 
     def _first_text(self, responses: list[dict]) -> str:
-        """Extract the first text response from Rasa."""
         for r in responses:
             if "text" in r:
                 return r["text"]
@@ -223,70 +192,54 @@ class TestConversationFlows:
 
     @pytest.mark.integration
     def test_check_balance_flow(self) -> None:
-        """Full check-balance conversation: two turns."""
         loop = asyncio.get_event_loop()
         sender = "test-balance-001"
-
-        # Turn 1 — trigger the flow
         responses = loop.run_until_complete(
             self._chat(sender, "What's my checking account balance?")
         )
         text = self._first_text(responses).lower()
-        # Could ask for account type or give balance directly
         assert any(kw in text for kw in ("account", "balance", "checking", "which"))
 
-        # Turn 2 — provide account type if asked
         responses = loop.run_until_complete(self._chat(sender, "checking"))
         text = self._first_text(responses).lower()
         assert "balance" in text or "2,450" in text or "checking" in text
 
     @pytest.mark.integration
     def test_transfer_money_flow(self) -> None:
-        """Full money-transfer conversation: five turns."""
         loop = asyncio.get_event_loop()
         sender = "test-transfer-001"
-
         turns = [
-            ("I want to transfer money", ["transfer", "account", "from"]),
-            ("checking", ["account", "to", "savings", "transfer"]),
-            ("savings", ["amount", "much", "transfer"]),
-            ("five hundred dollars", ["500", "confirm", "correct", "transferring"]),
-            ("yes", ["transferred", "done", "500"]),
+            ("I want to transfer money",      ["transfer", "account", "from"]),
+            ("checking",                       ["account", "to", "savings", "transfer"]),
+            ("savings",                        ["amount", "much", "transfer"]),
+            ("five hundred dollars",           ["500", "confirm", "correct", "transferring"]),
+            ("yes",                            ["transferred", "done", "500"]),
         ]
-
         for message, expected_keywords in turns:
             responses = loop.run_until_complete(self._chat(sender, message))
             text = self._first_text(responses).lower()
             assert any(kw in text for kw in expected_keywords), (
-                f"After sending {message!r}, expected one of {expected_keywords} "
-                f"in response but got: {text!r}"
+                f"After {message!r}, expected one of {expected_keywords}, got: {text!r}"
             )
 
     @pytest.mark.integration
     def test_report_lost_card_flow(self) -> None:
-        """Lost card flow: two turns, card gets blocked."""
         loop = asyncio.get_event_loop()
         sender = "test-lostcard-001"
-
-        # Turn 1 — trigger lost card
         responses = loop.run_until_complete(self._chat(sender, "I lost my card"))
         text = self._first_text(responses).lower()
         assert any(kw in text for kw in ("card", "block", "digits", "four"))
 
-        # Turn 2 — provide last four digits
         responses = loop.run_until_complete(self._chat(sender, "4532"))
         text = self._first_text(responses).lower()
         assert "blocked" in text or "4532" in text
 
     @pytest.mark.integration
     def test_default_fallback(self) -> None:
-        """Unintelligible input should trigger the fallback response."""
         loop = asyncio.get_event_loop()
         sender = "test-fallback-001"
-
         responses = loop.run_until_complete(
             self._chat(sender, "xkcd gibberish purple monkey dishwasher")
         )
         text = self._first_text(responses).lower()
-        # Should get some kind of "didn't understand" or help response
-        assert len(text) > 0, "Expected at least some response to unknown input"
+        assert len(text) > 0

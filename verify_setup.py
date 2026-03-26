@@ -1,20 +1,11 @@
 #!/usr/bin/env python3
-# === QV-LLM:BEGIN ===
-# path: verify_setup.py
-# role: module
-# neighbors: demo_heist.py, demo_live.py, generate_user_audio.py
-# exports: ok, warn, fail, section, hint, check_python_version, check_env_var, check_module (+3 more)
-# git_branch: chore/updateLatest
-# git_commit: e110917
-# === QV-LLM:END ===
-
 """
 verify_setup.py — Pre-flight diagnostics for the voice demo.
 
 Checks everything required before running the demo:
   - Environment variables (API keys)
   - Python dependencies
-  - External service connectivity (Deepgram, Rime, Rasa)
+  - External service connectivity (Speechmatics, Rasa)
   - Generated audio files
   - Heist demo components (sub agents, scenario arc)
 
@@ -38,34 +29,23 @@ load_dotenv()
 # ANSI colour helpers
 # ---------------------------------------------------------------------------
 
-GREEN = "\033[92m"
+GREEN  = "\033[92m"
 YELLOW = "\033[93m"
-RED = "\033[91m"
-BLUE = "\033[94m"
-BOLD = "\033[1m"
-RESET = "\033[0m"
+RED    = "\033[91m"
+BLUE   = "\033[94m"
+MAGENTA = "\033[95m"
+BOLD   = "\033[1m"
+RESET  = "\033[0m"
 
 
-def ok(msg: str) -> None:
-    print(f"{GREEN}  ✓ {msg}{RESET}")
-
-
-def warn(msg: str) -> None:
-    print(f"{YELLOW}  ⚠ {msg}{RESET}")
-
-
-def fail(msg: str) -> None:
-    print(f"{RED}  ✗ {msg}{RESET}")
-
-
-def section(title: str) -> None:
+def ok(msg):   print(f"{GREEN}  ✓ {msg}{RESET}")
+def warn(msg): print(f"{YELLOW}  ⚠ {msg}{RESET}")
+def fail(msg): print(f"{RED}  ✗ {msg}{RESET}")
+def section(title):
     print(f"\n{BLUE}{BOLD}{'─' * 60}{RESET}")
     print(f"{BLUE}{BOLD}  {title}{RESET}")
     print(f"{BLUE}{BOLD}{'─' * 60}{RESET}")
-
-
-def hint(msg: str) -> None:
-    print(f"      {YELLOW}{msg}{RESET}")
+def hint(msg): print(f"      {YELLOW}{msg}{RESET}")
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +57,7 @@ def check_python_version() -> bool:
     if v.major == 3 and v.minor in (10, 11):
         ok(f"Python {v.major}.{v.minor}.{v.micro}")
         return True
-    fail(f"Python {v.major}.{v.minor} detected — requires 3.10 or 3.11")
+    fail(f"Python {v.major}.{v.minor} — requires 3.10 or 3.11")
     hint("Use pyenv or a compatible virtualenv.")
     return False
 
@@ -123,57 +103,29 @@ def check_audio_files() -> bool:
 
 
 def check_heist_components() -> bool:
-    """Check all components required for the heist demo."""
     all_ok = True
-
     heist_files = [
-        ("demo_heist.py",                              "Heist demo orchestrator"),
-        ("scenario/arc.py",                            "Scenario arc"),
-        ("agents/caller_agent.py",                     "Caller agent"),
-        ("agents/security_classifier.py",              "Security classifier"),
-        ("sub_agents/llm_manager/config.yml",          "LLM Manager sub agent config"),
-        ("sub_agents/llm_manager/manager_agent.py",    "LLM Manager sub agent module"),
-        ("sub_agents/llm_manager/__init__.py",         "LLM Manager __init__"),
+        ("demo_heist.py",                           "Heist demo orchestrator"),
+        ("scenario/arc.py",                         "Scenario arc"),
+        ("agents/caller_agent.py",                  "Caller agent"),
+        ("agents/security_classifier.py",           "Security classifier"),
+        ("services/speechmatics_service.py",        "Speechmatics TTS/ASR service"),
+        ("sub_agents/llm_manager/config.yml",       "LLM Manager sub agent config"),
+        ("sub_agents/llm_manager/manager_agent.py", "LLM Manager sub agent module"),
+        ("sub_agents/llm_manager/__init__.py",      "LLM Manager __init__"),
     ]
-
     for path, label in heist_files:
         if Path(path).exists():
             ok(f"{label}  ({path})")
         else:
             fail(f"{label} missing  ({path})")
             all_ok = False
-
     return all_ok
 
 
-async def check_deepgram(api_key: str | None) -> bool:
+async def check_speechmatics(api_key: str | None) -> bool:
     if not api_key:
-        fail("Deepgram: skipped (API key not set)")
-        return False
-    try:
-        import aiohttp
-        headers = {"Authorization": f"Token {api_key}"}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.deepgram.com/v1/projects",
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status == 200:
-                    ok("Deepgram API key is valid")
-                    return True
-                fail(f"Deepgram returned HTTP {resp.status}")
-                hint("Check your DEEPGRAM_API_KEY.")
-                return False
-    except Exception as exc:
-        fail(f"Deepgram unreachable: {exc}")
-        hint("Check your internet connection.")
-        return False
-
-
-async def check_rime(api_key: str | None) -> bool:
-    if not api_key:
-        fail("Rime: skipped (API key not set)")
+        fail("Speechmatics: skipped (SPEECHMATICS_API_KEY not set)")
         return False
     try:
         import aiohttp
@@ -181,22 +133,23 @@ async def check_rime(api_key: str | None) -> bool:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        payload = {"text": "Test.", "speaker": "cove", "modelId": "mistv2"}
+        # Minimal TTS request to validate the key
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://users.rime.ai/v1/rime-tts",
+                "https://preview.tts.speechmatics.com/generate/theo",
                 headers=headers,
-                json=payload,
+                json={"text": "Test."},
+                params={"output_format": "wav_16000"},
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 if resp.status == 200:
-                    ok("Rime API key is valid")
+                    ok("Speechmatics API key is valid (TTS responded)")
                     return True
-                fail(f"Rime returned HTTP {resp.status}")
-                hint("Check your RIME_API_KEY.")
+                fail(f"Speechmatics TTS returned HTTP {resp.status}")
+                hint("Check your SPEECHMATICS_API_KEY.")
                 return False
     except Exception as exc:
-        fail(f"Rime unreachable: {exc}")
+        fail(f"Speechmatics unreachable: {exc}")
         hint("Check your internet connection.")
         return False
 
@@ -239,6 +192,7 @@ async def check_action_server() -> bool:
         hint("Run: make run-actions  (in a separate terminal)")
         return False
 
+
 async def check_mcp_server() -> bool:
     try:
         import aiohttp
@@ -254,6 +208,7 @@ async def check_mcp_server() -> bool:
         hint("Run: make run-mcp  (in a separate terminal)")
         return False
 
+
 # ---------------------------------------------------------------------------
 # Main runner
 # ---------------------------------------------------------------------------
@@ -266,84 +221,59 @@ async def run_checks() -> int:
     errors = 0
     warnings = 0
 
-    # ── Python ───────────────────────────────────────────────────────────
     section("Python Environment")
     if not check_python_version():
         errors += 1
 
-    # ── API Keys ─────────────────────────────────────────────────────────
     section("API Keys  (.env)")
-    rasa_ok = check_env_var("RASA_LICENSE", "Rasa Pro License")
-    dg_key = os.getenv("DEEPGRAM_API_KEY")
-    rime_key = os.getenv("RIME_API_KEY")
-
-    if not check_env_var("DEEPGRAM_API_KEY", "Deepgram API Key"):
+    if not check_env_var("RASA_LICENSE", "Rasa Pro License"):
         errors += 1
-    if not check_env_var("RIME_API_KEY", "Rime API Key"):
+    if not check_env_var("SPEECHMATICS_API_KEY", "Speechmatics API Key"):
         errors += 1
-    if not check_env_var("NEBIUS_API_KEY", "Nebius API Key"):
-        errors += 1
-    if not rasa_ok:
+    if not check_env_var("NEBIUS_API_KEY", "Nebius API Key (LLM)"):
         errors += 1
 
-    # ── Python Dependencies ──────────────────────────────────────────────
+    sm_key = os.getenv("SPEECHMATICS_API_KEY")
+
     section("Python Dependencies")
     deps = [
-        ("rasa", "Rasa Pro"),
-        ("rasa_sdk", "Rasa SDK"),
-        ("aiohttp", "aiohttp"),
-        ("pydub", "pydub"),
-        ("rich", "rich"),
-        ("dotenv", "python-dotenv"),
+        ("rasa",              "Rasa Pro"),
+        ("rasa_sdk",          "Rasa SDK"),
+        ("aiohttp",           "aiohttp"),
+        ("speechmatics",      "speechmatics-python"),
+        ("pydub",             "pydub"),
+        ("rich",              "rich"),
+        ("dotenv",            "python-dotenv"),
     ]
     for module, label in deps:
         if not check_module(module, label):
             errors += 1
 
-    # ── Config Files ─────────────────────────────────────────────────────
     section("Project Config Files")
-    config_files = [
-        "config.yml",
-        "credentials.yml",
-        "domain.yml",
-        "endpoints.yml",
-        "data/flows.yml",
-        ".env",
-    ]
-    for path in config_files:
+    for path in ["config.yml", "credentials.yml", "domain.yml", "endpoints.yml", "data/flows.yml", ".env"]:
         if not check_config_file(path):
             errors += 1
 
-    # ── Audio Files ───────────────────────────────────────────────────────
     section("Demo Audio Files")
     if not check_audio_files():
         errors += 1
 
-    # ── Heist Demo Components ─────────────────────────────────────────────
     section("Heist Demo Components")
     if not check_heist_components():
         errors += 1
 
-    # ── External Service Connectivity ────────────────────────────────────
     section("External Service Connectivity")
-    if not await check_deepgram(dg_key):
-        errors += 1
-    if not await check_rime(rime_key):
+    if not await check_speechmatics(sm_key):
         errors += 1
 
-    # ── Running Services (warnings only) ─────────────────────────────────
     section("Running Services  (required at demo time)")
-    rasa_running = await check_rasa()
-    actions_running = await check_action_server()
-    if not rasa_running:
+    if not await check_rasa():
         warnings += 1
-    if not actions_running:
+    if not await check_action_server():
         warnings += 1
-    mcp_running = await check_mcp_server()
-    if not mcp_running:
+    if not await check_mcp_server():
         warnings += 1
 
-    # ── Summary ──────────────────────────────────────────────────────────
     print(f"\n{BOLD}{'=' * 60}{RESET}")
     if errors == 0 and warnings == 0:
         print(f"{GREEN}{BOLD}✓ All checks passed — ready to demo!{RESET}")
@@ -354,9 +284,10 @@ async def run_checks() -> int:
         print("    make demo          # Tab 3")
         print()
         print(f"  {MAGENTA}Heist demo:{RESET}")
-        print("    make run-actions      # Tab 1")
-        print("    make run-rasa-heist   # Tab 2  ← sub agents enabled")
-        print("    make demo-heist       # Tab 3")
+        print("    make run-mcp          # Tab 1")
+        print("    make run-actions      # Tab 2")
+        print("    make run-rasa-heist   # Tab 3")
+        print("    make demo-heist       # Tab 4")
     elif errors == 0:
         print(f"{YELLOW}{BOLD}⚠ Setup complete with {warnings} warning(s).{RESET}")
         print(f"{YELLOW}  Start the services above before running the demo.{RESET}")
@@ -368,9 +299,6 @@ async def run_checks() -> int:
 
     return 0 if errors == 0 else 1
 
-
-# Need MAGENTA for summary block
-MAGENTA = "\033[95m"
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(run_checks()))

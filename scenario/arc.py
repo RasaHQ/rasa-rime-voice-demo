@@ -1,4 +1,12 @@
-# scenario/arc.py
+# === QV-LLM:BEGIN ===
+# path: scenario/arc.py
+# role: module
+# neighbors: __init__.py
+# exports: EscalationStage, ActiveAgent, TurnConfig
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 140a5eb
+# === QV-LLM:END ===
+
 """
 The Heist at First National Bank — Scenario Arc
 

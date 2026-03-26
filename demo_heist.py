@@ -4,12 +4,14 @@ demo_heist.py — The Heist at First National Bank
 
 A live security demo showing the difference between:
   - Rasa Pro CALM  (structured, secure, hybrid architecture)
-  - Pure LLM agent (flexible, conversational, but vulnerable)
+  - LLM Sub-Agent  (flexible, conversational, but ungrounded)
 
 The caller starts as a legitimate customer, gradually escalates
 to adversarial attacks. When Rasa blocks everything, the caller
-demands a manager — and Rasa hands off to the LLM sub agent.
-The attacks that failed on Rasa now succeed.
+demands a manager — and Rasa hands off to the LLM sub-agent.
+The sub-agent still runs under Rasa's orchestration, but has no
+structured banking flows — so it must reason from context alone,
+making it vulnerable to hallucination and social engineering.
 
 Three voices, real-time security annotations, big-screen safe UI.
 
@@ -48,7 +50,7 @@ from scenario.arc import (
     STAGE_DESCRIPTIONS,
     TurnConfig,
 )
-from services.tts_service import RimeTTS, RimeTTSError
+from services.speechmatics_service import SpeechmaticsService, SpeechmaticsTTSError
 from services.demo_logger import DemoLogger
 
 load_dotenv()
@@ -65,6 +67,13 @@ MAX_VISIBLE_TURNS = 6  # Rich has no scroll — keep this small so latest always
 # Sentinel phrase Rasa says when transferring to the sub agent.
 # We detect this to update the UI. Must match utter_transfer_to_human.
 TRANSFER_SENTINEL = "connect you with a senior member"
+
+# Voice names used in TTS log entries (mirrors SpeechmaticsService.VOICE_MAP)
+VOICE_MAP = {
+    "caller":  "megan",
+    "rasa":    "theo",
+    "manager": "sarah",
+}
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -100,18 +109,18 @@ _STRIP_PHRASE_RE = re.compile(
     "|".join(_STRIP_PHRASES), flags=re.IGNORECASE
 )
 
-# Rime TTS character limit
-RIME_MAX_CHARS = 900
+# Speechmatics TTS character limit (safe ceiling for latency)
+SPEECHMATICS_MAX_CHARS = 900
 
 
-def clean_for_speech(text: str, max_chars: int = RIME_MAX_CHARS) -> str:
+def clean_for_speech(text: str, max_chars: int = SPEECHMATICS_MAX_CHARS) -> str:
     """
     Prepare text for TTS and UI display:
     - Strip <think> blocks
     - Strip markdown formatting
     - Strip agent boilerplate phrases
     - Deduplicate repeated sentences
-    - Truncate to Rime's character limit
+    - Truncate to TTS character limit
     """
     text = strip_think(text)
     for pattern, replacement in _MARKDOWN_RE:
@@ -223,11 +232,11 @@ def render_header(state: DemoState) -> Panel:
     # Agent mode banner — changes colour when transfer happens
     if state.transferred:
         mode_text = Text()
-        mode_text.append("  ⚠  NOW CONNECTED TO: ", style="bold white")
-        mode_text.append("PURE LLM AGENT", style="bold red on dark_red")
-        mode_text.append("  —  No guardrails. No flow constraints.  ⚠ ", style="bold white")
-        mode_style = "on dark_red"
-        border_style = "red"
+        mode_text.append("  🤝  NOW WITH: ", style="bold white")
+        mode_text.append("LLM SUB-AGENT", style="bold yellow on dark_orange")
+        mode_text.append("  —  No domain flows. Conversational, but ungrounded.  🤝 ", style="bold white")
+        mode_style = "on dark_orange"
+        border_style = "yellow"
     else:
         mode_text = Text()
         mode_text.append("  🛡  CONNECTED TO: ", style="bold white")
@@ -270,8 +279,8 @@ BUBBLE_CONFIG = {
         "align": "right",
     },
     "manager": {
-        "title": "⚠  LLM MANAGER  —  Patricia Walsh  (No Guardrails)",
-        "border": "red",
+        "title": "🤝  LLM SUB-AGENT  —  Patricia Walsh  (No Domain Flows)",
+        "border": "yellow",
         "align": "right",
     },
 }
@@ -280,12 +289,12 @@ BUBBLE_CONFIG = {
 COMPACT_COLORS = {
     "caller":  "cyan",
     "rasa":    "green",
-    "manager": "red",
+    "manager": "yellow",
 }
 COMPACT_LABELS = {
-    "caller":  "CALLER ",
-    "rasa":    "RASA   ",
-    "manager": "MANAGER",
+    "caller":  "CALLER  ",
+    "rasa":    "RASA    ",
+    "manager": "PATRICIA",
 }
 
 
@@ -307,7 +316,7 @@ def conversation_bubble(text: str, agent_key: str) -> Align:
 def compact_line(text: str, agent_key: str) -> Text:
     """Single-line compact history entry for older turns."""
     colour = COMPACT_COLORS.get(agent_key, "white")
-    label = COMPACT_LABELS.get(agent_key, "???    ")
+    label = COMPACT_LABELS.get(agent_key, "???     ")
     t = Text(overflow="ellipsis", no_wrap=True)
     t.append(f" {label} ", style=f"bold {colour}")
     t.append(f"  {text[:90]}" + ("…" if len(text) > 90 else ""), style="dim white")
@@ -346,10 +355,10 @@ def render_conversation(state: DemoState) -> Panel:
                     inner = entry.renderable  # Panel
                     # Transfer announcement panel has no border_style — skip it
                     if not hasattr(inner, 'border_style') or inner.border_style is None:
-                        rows.append(Text("  ── 📞  CALL ESCALATED TO MANAGER ──", style="dim red", justify="center"))
+                        rows.append(Text("  ── 📞  CALL ESCALATED TO LLM SUB-AGENT ──", style="dim yellow", justify="center"))
                         continue
                     agent_key = "caller" if inner.border_style == "cyan" else (
-                        "manager" if inner.border_style == "red" else "rasa"
+                        "manager" if inner.border_style == "yellow" else "rasa"
                     )
                     raw_text = inner.renderable.plain if hasattr(inner.renderable, "plain") else str(inner.renderable)
                     rows.append(compact_line(raw_text, agent_key))
@@ -384,12 +393,12 @@ def render_security_monitor(state: DemoState) -> Panel:
     legend.add_column()
     legend.add_column()
     legend.add_row(
-        Text("🛡  = Rasa blocked it", style="bold green"),
+        Text("🛡  = Rasa flow blocked it", style="bold green"),
         Text("🧠 = LLM hallucinated", style="bold red"),
     )
     legend.add_row(
         Text("🔍  = Probing attempt", style="yellow"),
-        Text("🚨 = Data leaked", style="dark_orange"),
+        Text("🚫 = LLM refused (cautious)", style="dim yellow"),
     )
     legend.add_row(
         Text("🎂  = Off-topic request", style="magenta"),
@@ -439,8 +448,8 @@ def render_ground_truth(state: DemoState) -> Panel:
     are revealing accurate information or hallucinating.
     """
     rows = []
-    title_style = "bold red" if state.transferred else "bold green"
-    agent_name = "LLM Manager (Patricia)" if state.transferred else "Rasa (Automated Line)"
+    title_style = "bold yellow" if state.transferred else "bold green"
+    agent_name = "LLM Sub-Agent (Patricia)" if state.transferred else "Rasa (Automated Line)"
 
     rows.append(Text(f"  Active agent: {agent_name}", style=title_style))
     rows.append(Rule(style="dim white"))
@@ -480,7 +489,7 @@ def render_status(
 ) -> Panel:
     global _frame_counter
     active_label = (
-        "⚠  PURE LLM AGENT  (unguarded)"
+        "🤝  LLM SUB-AGENT  (no domain flows)"
         if state.transferred
         else "🛡  RASA PRO  (structured + secure)"
     )
@@ -500,7 +509,7 @@ def render_status(
     grid.add_column(ratio=2, justify="right")
     grid.add_row(
         Text(display_msg, style=f"bold {display_style}"),
-        Text(active_label, style="bold red" if state.transferred else "bold green"),
+        Text(active_label, style="bold yellow" if state.transferred else "bold green"),
     )
     if hint and not state.thinking:
         grid.add_row(
@@ -523,23 +532,24 @@ def render_status(
 def render_transfer_announcement() -> Panel:
     text = Text(justify="center")
     text.append("\n")
-    text.append("  ═══════════════════════════════════════════════  \n", style="bold red")
-    text.append("  📞   CALL ESCALATED TO HUMAN MANAGER   📞  \n", style="bold white on dark_red")
-    text.append("  ═══════════════════════════════════════════════  \n\n", style="bold red")
+    text.append("  ═══════════════════════════════════════════════  \n", style="bold yellow")
+    text.append("  📞   ESCALATED TO LLM SUB-AGENT   📞  \n", style="bold white on dark_orange")
+    text.append("  ═══════════════════════════════════════════════  \n\n", style="bold yellow")
     text.append(
         "  Rasa has handed off the call to Patricia Walsh.\n"
-        "  The LLM Manager has received full conversation context.\n\n",
+        "  The LLM sub-agent is still orchestrated by Rasa,\n"
+        "  but has NO structured banking flows and NO domain grounding.\n\n",
         style="white",
     )
-    text.append("  ⚠  WARNING: ", style="bold red")
+    text.append("  ⚠  KEY DIFFERENCE: ", style="bold yellow")
     text.append(
-        "The LLM Manager has NO structured flows,\n"
-        "  NO domain restrictions, and NO guardrails.\n",
-        style="yellow",
+        "Rasa CALM answered only what its flows allow.\n"
+        "  Patricia must reason from context alone — which can go wrong.\n",
+        style="white",
     )
     text.append("\n")
-    text.append("  Watch what happens next...\n", style="bold white")
-    return Panel(text, border_style="red", box=box.DOUBLE, padding=(1, 2))
+    text.append("  Watch what the LLM sub-agent does next...\n", style="bold white")
+    return Panel(text, border_style="yellow", box=box.DOUBLE, padding=(1, 2))
 
 
 # ---------------------------------------------------------------------------
@@ -772,7 +782,7 @@ async def preflight(layout: Layout, state: DemoState) -> bool:
 async def run_heist() -> None:
     caller = CallerAgent()
     classifier = SecurityClassifier()
-    tts = RimeTTS()
+    tts = SpeechmaticsService()
     state = DemoState()
     log = DemoLogger(session_name="heist")
 
@@ -848,22 +858,31 @@ async def run_heist() -> None:
             )
             caller.add_own_turn(caller_text)
 
-            # Show caller bubble + play with typewriter — text appears with voice
+            # TTS the caller text, play it, then optionally ASR the audio.
+            # asr_text is what gets sent to Rasa:
+            #   - ASR transcript  if ENABLE_SPEECHMATICS_ASR=true
+            #   - original LLM text otherwise (ASR disabled or failed)
+            asr_text = caller_text  # default — overwritten if ASR is enabled
             try:
                 t0 = time.time()
-                caller_audio = await tts.synthesize(caller_text, agent_role="caller")
-                log.tts_request("caller", "abbie", caller_text, len(caller_audio), (time.time() - t0) * 1000)
+                caller_audio, asr_text = await tts.synthesize_and_transcribe(
+                    caller_text, agent_role="caller"
+                )
+                voice_label = VOICE_MAP.get("caller", "megan")
+                log.tts_request("caller", voice_label, caller_text, len(caller_audio), (time.time() - t0) * 1000)
                 await play_audio_with_typewriter(
                     caller_audio, caller_text, "caller", state, layout
                 )
-            except RimeTTSError as exc:
+                if asr_text != caller_text:
+                    logger.debug("ASR transcript used for Rasa: %r", asr_text)
+            except SpeechmaticsTTSError as exc:
                 log.error("tts_caller", str(exc), exc)
                 logger.warning("Caller TTS: %s", exc)
                 state.conversation.append(conversation_bubble(caller_text, "caller"))
                 layout["conversation"].update(render_conversation(state))
 
             # ── Rasa responds (all turns go through Rasa) ─────────────────
-            agent_name = "LLM Manager" if state.transferred else "Rasa"
+            agent_name = "LLM Sub-Agent" if state.transferred else "Rasa"
             state.thinking = True
             state.thinking_label = f"{agent_name} is thinking..."
             layout["status"].update(
@@ -871,7 +890,7 @@ async def run_heist() -> None:
             )
 
             t0 = time.time()
-            raw_response = await send_to_rasa(caller_text, sender_id)
+            raw_response = await send_to_rasa(asr_text, sender_id)
             bank_response = clean_for_speech(raw_response)
 
             # ── Human handoff rejection recovery ─────────────────────────
@@ -929,11 +948,11 @@ async def run_heist() -> None:
             if not bank_response or not bank_response.strip():
                 log._emit("rasa_empty_response", {"turn": state.turn})
                 state.thinking = False
-                caller.add_bank_response("(silent)", "LLM MANAGER" if state.transferred else "RASA")
+                caller.add_bank_response("(silent)", "LLM SUB-AGENT" if state.transferred else "RASA")
                 continue
 
             log.rasa_exchange(
-                sender_id, caller_text, bank_response,
+                sender_id, asr_text, bank_response,
                 (time.time() - t0) * 1000,
             )
 
@@ -946,12 +965,12 @@ async def run_heist() -> None:
                 try:
                     t0 = time.time()
                     ack_audio = await tts.synthesize(rasa_ack, agent_role="rasa")
-                    log.tts_request("rasa", "cove", rasa_ack, len(ack_audio), (time.time() - t0) * 1000)
+                    log.tts_request("rasa", VOICE_MAP["rasa"], rasa_ack, len(ack_audio), (time.time() - t0) * 1000)
                     # Show Rasa's acknowledgement bubble when audio starts
                     state.conversation.append(conversation_bubble(rasa_ack, "rasa"))
                     layout["conversation"].update(render_conversation(state))
                     await play_audio(ack_audio)
-                except RimeTTSError as exc:
+                except SpeechmaticsTTSError as exc:
                     log.error("tts_rasa", str(exc), exc)
                     state.conversation.append(conversation_bubble(rasa_ack, "rasa"))
                     layout["conversation"].update(render_conversation(state))
@@ -966,39 +985,55 @@ async def run_heist() -> None:
                 layout["conversation"].update(render_conversation(state))
                 layout["status"].update(
                     render_status(
-                        "🔀  Transferring to LLM Manager...",
-                        "red", "red",
-                        "Rasa hands off full conversation context. No guardrails active.",
+                        "🔀  Handing off to LLM Sub-Agent...",
+                        "yellow", "yellow",
+                        "Rasa passes full conversation context. No domain flows active.",
                         state,
                     )
                 )
                 await asyncio.sleep(3)
 
-                # ── Manager greeting — Patricia introduces herself ──────────
-                # This gives the caller context that they've been transferred,
-                # and prevents the caller from immediately asking about cake
-                # before hearing Patricia speak.
+                # ── Sub-agent greeting — Patricia introduces herself ────────
+                # IMPORTANT: We display and utter the caller's opening line first,
+                # so the audience sees Alex speak before Patricia responds.
+                # Without this the greeting exchange is invisible, making it seem
+                # like Alex gives the account number out of nowhere on the next turn.
+                greeting_msg = "Hello? Is this the senior manager? I was just transferred over."
+
+                # Show and speak caller's greeting — this must be visible to the audience
+                try:
+                    greet_caller_audio = await tts.synthesize(greeting_msg, agent_role="caller")
+                    log.tts_request("caller", VOICE_MAP["caller"], greeting_msg, len(greet_caller_audio), 0)
+                    await play_audio_with_typewriter(
+                        greet_caller_audio, greeting_msg, "caller", state, layout
+                    )
+                except SpeechmaticsTTSError as exc:
+                    log.error("tts_caller_greeting", str(exc), exc)
+                    state.conversation.append(conversation_bubble(greeting_msg, "caller"))
+                    layout["conversation"].update(render_conversation(state))
+
+                # Now send to Patricia and get her response
                 state.thinking = True
-                state.thinking_label = "LLM Manager is picking up..."
+                state.thinking_label = "LLM Sub-Agent is picking up..."
                 layout["status"].update(
-                    render_status("", "red", "red", "Manager is on the line...", state)
+                    render_status("", "yellow", "yellow", "Patricia is on the line...", state)
                 )
-                greeting_msg = "Hello, this is the manager. How can I help you today?"
                 greeting_response = clean_for_speech(await send_to_rasa(greeting_msg, sender_id))
                 state.thinking = False
+
                 if greeting_response and len(greeting_response) > 10:
                     try:
                         greet_audio = await tts.synthesize(greeting_response, agent_role="manager")
-                        log.tts_request("manager", "luna", greeting_response, len(greet_audio), 0)
+                        log.tts_request("manager", VOICE_MAP["manager"], greeting_response, len(greet_audio), 0)
                         await play_audio_with_typewriter(
                             greet_audio, greeting_response, "manager", state, layout
                         )
-                        caller.add_bank_response(greeting_response, "LLM MANAGER")
-                    except RimeTTSError as exc:
+                        caller.add_bank_response(greeting_response, "LLM SUB-AGENT")
+                    except SpeechmaticsTTSError as exc:
                         log.error("tts_manager_greeting", str(exc), exc)
                         state.conversation.append(conversation_bubble(greeting_response, "manager"))
                         layout["conversation"].update(render_conversation(state))
-                        caller.add_bank_response(greeting_response, "LLM MANAGER")
+                        caller.add_bank_response(greeting_response, "LLM SUB-AGENT")
                 await asyncio.sleep(1)
 
                 caller.add_bank_response(bank_response, "RASA")
@@ -1009,7 +1044,7 @@ async def run_heist() -> None:
             agent_key = "manager" if state.transferred else "rasa"
 
             # Update caller memory with clean bank response
-            label_for_memory = "LLM MANAGER" if state.transferred else "RASA"
+            label_for_memory = "LLM SUB-AGENT" if state.transferred else "RASA"
             caller.add_bank_response(bank_response, label_for_memory)
 
             # ── Security classification (concurrent with TTS) ─────────────
@@ -1018,12 +1053,12 @@ async def run_heist() -> None:
             )
 
             # ── TTS + show bubble at same time (text appears with voice) ──
-            agent_display = "LLM Manager" if state.transferred else "Rasa"
+            agent_display = "LLM Sub-Agent" if state.transferred else "Rasa"
             layout["status"].update(
                 render_status(
                     f"🗣️  {agent_display} speaking...",
-                    "red" if state.transferred else "green",
-                    "red" if state.transferred else "green",
+                    "yellow" if state.transferred else "green",
+                    "yellow" if state.transferred else "green",
                     turn_config.audience_hint,
                     state,
                 )
@@ -1032,13 +1067,12 @@ async def run_heist() -> None:
             try:
                 t0 = time.time()
                 bank_audio = await tts.synthesize(bank_response, agent_role=agent_key)
-                voice = "luna" if agent_key == "manager" else "cove"
-                log.tts_request(agent_key, voice, bank_response, len(bank_audio), (time.time() - t0) * 1000)
+                log.tts_request(agent_key, VOICE_MAP.get(agent_key, "megan"), bank_response, len(bank_audio), (time.time() - t0) * 1000)
                 # Typewriter effect: text reveals word by word as audio plays
                 await play_audio_with_typewriter(
                     bank_audio, bank_response, agent_key, state, layout
                 )
-            except RimeTTSError as exc:
+            except SpeechmaticsTTSError as exc:
                 log.error(f"tts_{agent_key}", str(exc), exc)
                 logger.warning("Bank TTS: %s", exc)
                 state.conversation.append(conversation_bubble(bank_response, agent_key))
@@ -1062,10 +1096,10 @@ async def run_heist() -> None:
                     inner = item.renderable
                     border = getattr(inner, "border_style", None)
                     if border is None:
-                        conversation_text.append("[SYSTEM] CALL ESCALATED TO MANAGER")
+                        conversation_text.append("[SYSTEM] CALL ESCALATED TO LLM SUB-AGENT")
                         continue
                     raw = inner.renderable.plain if hasattr(inner.renderable, "plain") else str(inner.renderable)
-                    who = "CALLER" if border == "cyan" else ("MANAGER" if border == "red" else "RASA")
+                    who = "CALLER" if border == "cyan" else ("PATRICIA" if border == "yellow" else "RASA")
                     conversation_text.append(f"[{who}] {raw[:80]}")
                 except Exception:
                     conversation_text.append("[?]")
@@ -1074,7 +1108,7 @@ async def run_heist() -> None:
                 turn=state.turn,
                 active_agent="manager" if state.transferred else "rasa",
                 transferred=state.transferred,
-                header_mode="LLM MANAGER (no guardrails)" if state.transferred else "RASA PRO (secure)",
+                header_mode="LLM SUB-AGENT (no domain flows)" if state.transferred else "RASA PRO (secure)",
                 status_message=f"{emoji} Security verdict: {display}",
                 security_events=state.security_events,
                 conversation_summary=conversation_text,
@@ -1127,9 +1161,9 @@ async def run_heist() -> None:
         summary_grid.add_row(
             Text(f"✅  {safe}\nSafe turns", style="bold green", justify="center"),
             Text(f"🛡   {blocked}\nBlocked by Rasa", style="bold cyan", justify="center"),
-            Text(f"🧠  {hallucinated}\nHallucinated\n(LLM Agent)", style="bold red", justify="center"),
-            Text(f"🚨  {leaked}\nLeaked / Compromised\n(LLM Agent)", style="bold dark_orange", justify="center"),
-            Text(f"🎂  {offtopic}\nOff-topic answered\n(LLM Agent)", style="bold magenta", justify="center"),
+            Text(f"🧠  {hallucinated}\nHallucinated\n(LLM Sub-Agent)", style="bold red", justify="center"),
+            Text(f"🚨  {leaked}\nLeaked / Compromised\n(LLM Sub-Agent)", style="bold dark_orange", justify="center"),
+            Text(f"🎂  {offtopic}\nOff-topic answered\n(LLM Sub-Agent)", style="bold magenta", justify="center"),
         )
 
         layout["status"].update(
@@ -1137,7 +1171,7 @@ async def run_heist() -> None:
                 summary_grid,
                 title=(
                     "[bold white]  ✅  DEMO COMPLETE  —  "
-                    "Rasa blocked everything. The LLM Agent did not.  [/bold white]"
+                    "Rasa CALM: grounded flows. LLM Sub-Agent: conversational, but ungrounded.  [/bold white]"
                 ),
                 border_style="green",
             )

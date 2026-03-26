@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
-# === QV-LLM:BEGIN ===
-# path: demo_live.py
-# role: module
-# neighbors: demo_heist.py, generate_user_audio.py, verify_setup.py
-# exports: make_layout, set_status, update_chat, user_bubble, agent_bubble
-# git_branch: chore/updateLatest
-# git_commit: e110917
-# === QV-LLM:END ===
-
 """
-demo_live.py — Voice Orchestration Demo
+demo_live.py — Voice Orchestration Demo (Speechmatics edition)
 
 Orchestrates a live banking conversation using:
-  - Pre-generated user audio (Rime "Abbie" voice)
-  - Deepgram Nova-2 for ASR
+  - Pre-generated user audio (Speechmatics Megan voice)
+  - Speechmatics RT ASR for speech-to-text
   - Rasa Pro (CALM) for dialogue management
-  - Rime Mist v2 for TTS
+  - Speechmatics TTS for agent responses
 
 Run this after starting the action server and Rasa:
   make run-actions   # Tab 1
@@ -41,8 +32,7 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from services.asr_service import DeepgramASR, DeepgramASRError
-from services.tts_service import RimeTTS, RimeTTSError
+from services.speechmatics_service import SpeechmaticsService, SpeechmaticsTTSError
 
 load_dotenv()
 
@@ -70,7 +60,6 @@ console = Console()
 # ---------------------------------------------------------------------------
 
 def make_layout() -> Layout:
-    """Three-section layout: header / scrolling chat / status bar."""
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
@@ -129,7 +118,6 @@ def agent_bubble(text: str) -> Align:
 # ---------------------------------------------------------------------------
 
 async def play_audio_bytes(audio_bytes: bytes) -> None:
-    """Play raw WAV bytes without blocking the event loop."""
     try:
         segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="wav")
         await asyncio.get_event_loop().run_in_executor(None, play, segment)
@@ -142,7 +130,6 @@ async def play_audio_bytes(audio_bytes: bytes) -> None:
 # ---------------------------------------------------------------------------
 
 async def send_to_rasa(message: str) -> list[dict]:
-    """POST a user message to Rasa and return the list of bot responses."""
     async with aiohttp.ClientSession() as session:
         async with session.post(
             RASA_URL,
@@ -160,14 +147,9 @@ async def send_to_rasa(message: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 async def preflight_check(layout: Layout) -> bool:
-    """
-    Verify Rasa is reachable and audio files exist before starting the demo.
-    Returns True if all checks pass.
-    """
     set_status(layout, "🔍 Running pre-flight checks...", "bold yellow", "yellow")
     await asyncio.sleep(0.3)
 
-    # Check audio files
     missing = [
         step["file"]
         for step in CONVERSATION_STEPS
@@ -177,29 +159,21 @@ async def preflight_check(layout: Layout) -> bool:
         set_status(
             layout,
             f"❌ Missing audio files: {', '.join(missing)}\nRun: make generate-audio",
-            "bold red",
-            "red",
+            "bold red", "red",
         )
         await asyncio.sleep(5)
         return False
 
-    # Check Rasa
     try:
         rasa_base = RASA_URL.replace("/webhooks/rest/webhook", "")
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{rasa_base}/",
-                timeout=aiohttp.ClientTimeout(total=5),
+                f"{rasa_base}/", timeout=aiohttp.ClientTimeout(total=5),
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(f"HTTP {resp.status}")
     except Exception as exc:
-        set_status(
-            layout,
-            f"❌ Rasa not reachable: {exc}\nRun: make run-rasa",
-            "bold red",
-            "red",
-        )
+        set_status(layout, f"❌ Rasa not reachable: {exc}\nRun: make run-rasa", "bold red", "red")
         await asyncio.sleep(5)
         return False
 
@@ -211,17 +185,15 @@ async def preflight_check(layout: Layout) -> bool:
 # ---------------------------------------------------------------------------
 
 async def run_demo() -> None:
-    asr = DeepgramASR()
-    tts = RimeTTS()
+    tts = SpeechmaticsService()
 
     layout = make_layout()
     header_text = Text(
-        "🎁 Unwrap the Future: Voice Orchestration",
+        "🏦 Voice Orchestration — Rasa + Speechmatics",
         style="bold white on magenta",
         justify="center",
     )
     layout["header"].update(Panel(header_text, style="magenta"))
-
     history: list = []
 
     with Live(layout, refresh_per_second=10, screen=True):
@@ -235,19 +207,18 @@ async def run_demo() -> None:
             audio_path = AUDIO_DIR / step["file"]
 
             # ── User speaks ──────────────────────────────────────────────
-            set_status(
-                layout,
-                f"🔊 User speaking... [{step['label']}]",
-                "bold cyan",
-                "cyan",
-            )
+            set_status(layout, f"🔊 User speaking... [{step['label']}]", "bold cyan", "cyan")
             play(AudioSegment.from_wav(str(audio_path)))
 
-            # ── ASR ──────────────────────────────────────────────────────
-            set_status(layout, "⚡ Deepgram transcribing...", "bold yellow", "yellow")
+            # ── ASR: transcribe the played audio ─────────────────────────
+            set_status(layout, "⚡ Speechmatics transcribing...", "bold yellow", "yellow")
             try:
-                transcript = await asr.transcribe(audio_path)
-            except DeepgramASRError as exc:
+                audio_bytes = audio_path.read_bytes()
+                transcript = await tts.transcribe(audio_bytes)
+                if not transcript:
+                    console.print("[yellow]Empty ASR transcript — skipping turn[/yellow]")
+                    continue
+            except Exception as exc:
                 console.print(f"[red]ASR error: {exc}[/red]")
                 continue
 
@@ -271,26 +242,16 @@ async def run_demo() -> None:
                 history.append(agent_bubble(agent_text))
                 update_chat(layout, history)
 
-                set_status(
-                    layout,
-                    "🗣️ Rime generating & speaking...",
-                    "bold magenta",
-                    "magenta",
-                )
+                set_status(layout, "🗣️ Speechmatics speaking...", "bold magenta", "magenta")
                 try:
-                    audio_bytes = await tts.synthesize(agent_text)
+                    audio_bytes = await tts.synthesize(agent_text, agent_role="rasa")
                     await play_audio_bytes(audio_bytes)
-                except RimeTTSError as exc:
+                except SpeechmaticsTTSError as exc:
                     console.print(f"[red]TTS error: {exc}[/red]")
 
             time.sleep(0.5)
 
-        set_status(
-            layout,
-            "✨ Demo complete!",
-            "bold white on green",
-            "green",
-        )
+        set_status(layout, "✨ Demo complete!", "bold white on green", "green")
         await asyncio.sleep(10)
 
 
