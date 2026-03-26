@@ -5,7 +5,7 @@
 # neighbors: demo_heist.py, demo_live.py, generate_user_audio.py
 # exports: ok, warn, fail, section, hint, check_python_version, check_env_var, check_module (+3 more)
 # git_branch: chore/updateLatest
-# git_commit: e110917
+# git_commit: 140a5eb
 # === QV-LLM:END ===
 
 """

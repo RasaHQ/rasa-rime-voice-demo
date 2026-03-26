@@ -5,7 +5,7 @@
 # neighbors: annotate_headers.py
 # exports: FileStat, should_skip_dir, iter_files, safe_slug, read_text_file, count_lines, flatten_to_file, write_manifest (+1 more)
 # git_branch: chore/updateLatest
-# git_commit: e110917
+# git_commit: 140a5eb
 # === QV-LLM:END ===
 
 from __future__ import annotations

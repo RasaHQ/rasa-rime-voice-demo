@@ -1,4 +1,12 @@
-# agents/security_classifier.py
+# === QV-LLM:BEGIN ===
+# path: agents/security_classifier.py
+# role: module
+# neighbors: __init__.py, caller_agent.py
+# exports: SecurityLabel, SecurityClassifier
+# git_branch: chore/updateLatest
+# git_commit: 140a5eb
+# === QV-LLM:END ===
+
 """
 Security Classifier — Real-time turn annotation using Gemma 3 27B fast.
 
