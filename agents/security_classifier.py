@@ -23,27 +23,29 @@ CLASSIFIER_MODEL = "google/gemma-3-27b-it-fast"
 
 
 class SecurityLabel(Enum):
-    SAFE        = "SAFE"
-    PROBING     = "PROBING"
-    SOCIAL      = "SOCIAL"
-    OFF_TOPIC   = "OFF_TOPIC"
-    INJECTION   = "INJECTION"
-    LEAKED      = "LEAKED"
-    COMPROMISED = "COMPROMISED"
-    BLOCKED     = "BLOCKED"
-    UNKNOWN     = "UNKNOWN"
+    SAFE         = "SAFE"
+    PROBING      = "PROBING"
+    SOCIAL       = "SOCIAL"
+    OFF_TOPIC    = "OFF_TOPIC"
+    HALLUCINATED = "HALLUCINATED"
+    LEAKED       = "LEAKED"
+    COMPROMISED  = "COMPROMISED"
+    BLOCKED      = "BLOCKED"     # Rasa blocked it (structured system)
+    REFUSED      = "REFUSED"     # LLM manager happened to refuse (unstructured)
+    UNKNOWN      = "UNKNOWN"
 
 
 LABEL_DISPLAY = {
-    SecurityLabel.SAFE:        ("✅", "green",       "SAFE"),
-    SecurityLabel.PROBING:     ("🔍", "yellow",      "PROBING"),
-    SecurityLabel.SOCIAL:      ("🤝", "yellow",      "SOCIAL ENGINEERING"),
-    SecurityLabel.OFF_TOPIC:   ("🎂", "magenta",     "OFF-TOPIC"),
-    SecurityLabel.INJECTION:   ("💉", "dark_orange", "INJECTION ATTEMPT"),
-    SecurityLabel.LEAKED:      ("⚠️ ", "red",        "DATA LEAKED"),
-    SecurityLabel.COMPROMISED: ("🚨", "bold red",    "COMPROMISED"),
-    SecurityLabel.BLOCKED:     ("🛡️ ", "cyan",       "BLOCKED BY RASA"),
-    SecurityLabel.UNKNOWN:     ("❓", "white",       "UNKNOWN"),
+    SecurityLabel.SAFE:         ("✅", "green",       "SAFE"),
+    SecurityLabel.PROBING:      ("🔍", "yellow",      "PROBING"),
+    SecurityLabel.SOCIAL:       ("🤝", "yellow",      "SOCIAL ENGINEERING"),
+    SecurityLabel.OFF_TOPIC:    ("🎂", "magenta",     "OFF-TOPIC"),
+    SecurityLabel.HALLUCINATED: ("🧠", "bold red",    "HALLUCINATED"),
+    SecurityLabel.LEAKED:       ("⚠️ ", "red",        "DATA LEAKED"),
+    SecurityLabel.COMPROMISED:  ("🚨", "bold red",    "COMPROMISED"),
+    SecurityLabel.BLOCKED:      ("🛡️ ", "cyan",       "BLOCKED BY RASA"),
+    SecurityLabel.REFUSED:      ("🚫", "dim red",     "LLM REFUSED (luck)"),
+    SecurityLabel.UNKNOWN:      ("❓", "white",       "UNKNOWN"),
 }
 
 

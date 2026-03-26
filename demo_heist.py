@@ -79,28 +79,88 @@ def strip_think(text: str) -> str:
 
 _MARKDOWN_RE = [
     (re.compile(r'\*\*(.+?)\*\*', re.DOTALL), r'\1'),
-    (re.compile(r'\*(.+?)\*',    re.DOTALL), r'\1'),
-    (re.compile(r'_(.+?)_',      re.DOTALL), r'\1'),
-    (re.compile(r'`(.+?)`',      re.DOTALL), r'\1'),
-    (re.compile(r'#+\s*'),                   r''),
+    (re.compile(r'\*(.+?)\*',     re.DOTALL), r'\1'),
+    (re.compile(r'_(.+?)_',       re.DOTALL), r'\1'),
+    (re.compile(r'`(.+?)`',       re.DOTALL), r'\1'),
+    (re.compile(r'#+\s*'),                    r''),
 ]
 
+# Boilerplate phrases the sub agent or Rasa appends that should not be spoken
+_STRIP_PHRASES = [
+    r"Would you like to continue with request human\??",
+    r"Would you like to continue\??",
+    r"Is there anything else I can help you with\??",
+    r"Is there something else I can help you with today\??",
+    # Rasa's chitchat handler bleeds into manager responses on resume
+    r"I'?m sorry,?\s+I'?m not trained to help with that\.?\s*",
+    r"I'?m not trained to help with that\.?\s*",
+    r"I cannot help with that\.?\s*",
+]
+_STRIP_PHRASE_RE = re.compile(
+    "|".join(_STRIP_PHRASES), flags=re.IGNORECASE
+)
 
-def clean_for_speech(text: str) -> str:
+# Rime TTS character limit
+RIME_MAX_CHARS = 900
+
+
+def clean_for_speech(text: str, max_chars: int = RIME_MAX_CHARS) -> str:
     """
-    Strip markdown formatting that TTS would speak literally.
-    Applies to both caller and bank agent responses.
+    Prepare text for TTS and UI display:
+    - Strip <think> blocks
+    - Strip markdown formatting
+    - Strip agent boilerplate phrases
+    - Deduplicate repeated sentences
+    - Truncate to Rime's character limit
     """
     text = strip_think(text)
     for pattern, replacement in _MARKDOWN_RE:
         text = pattern.sub(replacement, text)
-    # Deduplicate repeated sentences (Rasa doubled-response bug)
-    sentences = text.split(". ")
-    seen = []
+    # Strip boilerplate
+    text = _STRIP_PHRASE_RE.sub("", text)
+    # Deduplicate repeated sentences
+    sentences = [s.strip() for s in text.split(". ") if s.strip()]
+    seen, deduped = set(), []
     for s in sentences:
-        if s not in seen:
-            seen.append(s)
-    return ". ".join(seen).strip()
+        key = s.lower()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(s)
+    text = ". ".join(deduped).strip()
+    # Ensure ends with punctuation
+    if text and text[-1] not in ".!?":
+        text += "."
+    # Hard truncate for TTS (truncate at last sentence boundary)
+    if len(text) > max_chars:
+        truncated = text[:max_chars]
+        # Find last sentence boundary
+        for sep in [". ", "! ", "? "]:
+            idx = truncated.rfind(sep)
+            if idx > max_chars // 2:
+                text = truncated[:idx + 1]
+                break
+        else:
+            text = truncated.rsplit(" ", 1)[0] + "."
+    return text.strip()
+
+
+def split_at_sentinel(text: str, sentinel: str) -> tuple[str, str]:
+    """
+    Split a combined Rasa+sub_agent response at the sentinel phrase.
+    Returns (rasa_part, manager_part).
+    """
+    idx = text.lower().find(sentinel.lower())
+    if idx == -1:
+        return text, ""
+    # Include the sentinel sentence
+    end = text.find(".", idx)
+    if end == -1:
+        end = text.find("!", idx)
+    if end == -1:
+        end = len(text)
+    rasa_part = text[:end + 1].strip()
+    manager_part = text[end + 1:].strip()
+    return rasa_part, manager_part
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +344,10 @@ def render_conversation(state: DemoState) -> Panel:
                 # entry is an Align wrapping a Panel — extract the text
                 try:
                     inner = entry.renderable  # Panel
+                    # Transfer announcement panel has no border_style — skip it
+                    if not hasattr(inner, 'border_style') or inner.border_style is None:
+                        rows.append(Text("  ── 📞  CALL ESCALATED TO MANAGER ──", style="dim red", justify="center"))
+                        continue
                     agent_key = "caller" if inner.border_style == "cyan" else (
                         "manager" if inner.border_style == "red" else "rasa"
                     )
@@ -321,11 +385,11 @@ def render_security_monitor(state: DemoState) -> Panel:
     legend.add_column()
     legend.add_row(
         Text("🛡  = Rasa blocked it", style="bold green"),
-        Text("🚨 = LLM was fooled", style="bold red"),
+        Text("🧠 = LLM hallucinated", style="bold red"),
     )
     legend.add_row(
         Text("🔍  = Probing attempt", style="yellow"),
-        Text("💉 = Injection attack", style="dark_orange"),
+        Text("🚨 = Data leaked", style="dark_orange"),
     )
     legend.add_row(
         Text("🎂  = Off-topic request", style="magenta"),
@@ -486,6 +550,63 @@ async def play_audio(audio_bytes: bytes) -> None:
     try:
         segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="wav")
         await asyncio.get_event_loop().run_in_executor(None, play, segment)
+    except Exception as exc:
+        logger.warning("Audio error: %s", exc)
+
+
+async def play_audio_with_typewriter(
+    audio_bytes: bytes,
+    text: str,
+    agent_key: str,
+    state: DemoState,
+    layout: Layout,
+) -> None:
+    """
+    Play audio while simultaneously revealing the bubble text word by word,
+    creating a live transcription effect synchronized with the voice.
+    """
+    words = text.split()
+    if not words:
+        await play_audio(audio_bytes)
+        return
+
+    try:
+        segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="wav")
+        duration_s = len(segment) / 1000.0
+    except Exception:
+        # Fallback: just show all text and play
+        state.conversation.append(conversation_bubble(text, agent_key))
+        layout["conversation"].update(render_conversation(state))
+        await play_audio(audio_bytes)
+        return
+
+    # Add an empty bubble placeholder
+    state.conversation.append(conversation_bubble("▋", agent_key))
+    layout["conversation"].update(render_conversation(state))
+
+    # Calculate per-word interval
+    delay_per_word = duration_s / max(len(words), 1)
+
+    # Start audio playback in background
+    audio_task = asyncio.get_event_loop().run_in_executor(None, play, segment)
+
+    # Reveal words progressively
+    revealed = []
+    for word in words:
+        revealed.append(word)
+        current_text = " ".join(revealed) + " ▋"
+        # Replace the last bubble with updated text
+        state.conversation[-1] = conversation_bubble(current_text, agent_key)
+        layout["conversation"].update(render_conversation(state))
+        await asyncio.sleep(delay_per_word)
+
+    # Final bubble without cursor
+    state.conversation[-1] = conversation_bubble(text, agent_key)
+    layout["conversation"].update(render_conversation(state))
+
+    # Ensure audio completes
+    try:
+        await audio_task
     except Exception as exc:
         logger.warning("Audio error: %s", exc)
 
@@ -705,20 +826,19 @@ async def run_heist() -> None:
             )
             caller.add_own_turn(caller_text)
 
-            # Show caller bubble immediately (caller speaking is real-time)
-            state.conversation.append(
-                conversation_bubble(caller_text, "caller")
-            )
-            layout["conversation"].update(render_conversation(state))
-
+            # Show caller bubble + play with typewriter — text appears with voice
             try:
                 t0 = time.time()
                 caller_audio = await tts.synthesize(caller_text, agent_role="caller")
                 log.tts_request("caller", "abbie", caller_text, len(caller_audio), (time.time() - t0) * 1000)
-                await play_audio(caller_audio)
+                await play_audio_with_typewriter(
+                    caller_audio, caller_text, "caller", state, layout
+                )
             except RimeTTSError as exc:
                 log.error("tts_caller", str(exc), exc)
                 logger.warning("Caller TTS: %s", exc)
+                state.conversation.append(conversation_bubble(caller_text, "caller"))
+                layout["conversation"].update(render_conversation(state))
 
             # ── Rasa responds (all turns go through Rasa) ─────────────────
             agent_name = "LLM Manager" if state.transferred else "Rasa"
@@ -729,12 +849,10 @@ async def run_heist() -> None:
             )
 
             t0 = time.time()
-            bank_response = clean_for_speech(await send_to_rasa(caller_text, sender_id))
+            raw_response = await send_to_rasa(caller_text, sender_id)
+            bank_response = clean_for_speech(raw_response)
 
             # ── Stuck flow detection ──────────────────────────────────────
-            # If Rasa is stuck in a collect loop (e.g. asking about transfer
-            # destination when the caller wants a manager), cancel the active
-            # flow and retry so CALM can process the actual intent.
             if is_rasa_stuck(bank_response) and turn_config.turn_number >= 4:
                 log._emit("rasa_stuck_detected", {
                     "turn": state.turn,
@@ -742,7 +860,8 @@ async def run_heist() -> None:
                     "caller_text": caller_text,
                 })
                 await cancel_active_flow(sender_id)
-                bank_response = clean_for_speech(await send_to_rasa(caller_text, sender_id))
+                raw_response = await send_to_rasa(caller_text, sender_id)
+                bank_response = clean_for_speech(raw_response)
                 log._emit("rasa_after_cancel", {
                     "turn": state.turn,
                     "new_response": bank_response,
@@ -755,17 +874,21 @@ async def run_heist() -> None:
 
             # Detect transfer trigger in Rasa's response
             if not state.transferred and is_transfer_response(bank_response):
+                # Split: Rasa's acknowledgement vs sub-agent's first response
+                rasa_ack, manager_first = split_at_sentinel(bank_response, TRANSFER_SENTINEL)
+                rasa_ack = clean_for_speech(rasa_ack)
+
                 try:
                     t0 = time.time()
-                    ack_audio = await tts.synthesize(bank_response, agent_role="rasa")
-                    log.tts_request("rasa", "cove", bank_response, len(ack_audio), (time.time() - t0) * 1000)
+                    ack_audio = await tts.synthesize(rasa_ack, agent_role="rasa")
+                    log.tts_request("rasa", "cove", rasa_ack, len(ack_audio), (time.time() - t0) * 1000)
                     # Show Rasa's acknowledgement bubble when audio starts
-                    state.conversation.append(conversation_bubble(bank_response, "rasa"))
+                    state.conversation.append(conversation_bubble(rasa_ack, "rasa"))
                     layout["conversation"].update(render_conversation(state))
                     await play_audio(ack_audio)
                 except RimeTTSError as exc:
                     log.error("tts_rasa", str(exc), exc)
-                    state.conversation.append(conversation_bubble(bank_response, "rasa"))
+                    state.conversation.append(conversation_bubble(rasa_ack, "rasa"))
                     layout["conversation"].update(render_conversation(state))
 
                 # Dramatic transfer announcement
@@ -784,7 +907,34 @@ async def run_heist() -> None:
                         state,
                     )
                 )
-                await asyncio.sleep(4)
+                await asyncio.sleep(3)
+
+                # ── Manager greeting — Patricia introduces herself ──────────
+                # This gives the caller context that they've been transferred,
+                # and prevents the caller from immediately asking about cake
+                # before hearing Patricia speak.
+                state.thinking = True
+                state.thinking_label = "LLM Manager is picking up..."
+                layout["status"].update(
+                    render_status("", "red", "red", "Manager is on the line...", state)
+                )
+                greeting_msg = "Hello, this is the manager. How can I help you today?"
+                greeting_response = clean_for_speech(await send_to_rasa(greeting_msg, sender_id))
+                state.thinking = False
+                if greeting_response and len(greeting_response) > 10:
+                    try:
+                        greet_audio = await tts.synthesize(greeting_response, agent_role="manager")
+                        log.tts_request("manager", "luna", greeting_response, len(greet_audio), 0)
+                        await play_audio_with_typewriter(
+                            greet_audio, greeting_response, "manager", state, layout
+                        )
+                        caller.add_bank_response(greeting_response, "LLM MANAGER")
+                    except RimeTTSError as exc:
+                        log.error("tts_manager_greeting", str(exc), exc)
+                        state.conversation.append(conversation_bubble(greeting_response, "manager"))
+                        layout["conversation"].update(render_conversation(state))
+                        caller.add_bank_response(greeting_response, "LLM MANAGER")
+                await asyncio.sleep(1)
 
                 caller.add_bank_response(bank_response, "RASA")
                 continue
@@ -819,14 +969,13 @@ async def run_heist() -> None:
                 bank_audio = await tts.synthesize(bank_response, agent_role=agent_key)
                 voice = "luna" if agent_key == "manager" else "cove"
                 log.tts_request(agent_key, voice, bank_response, len(bank_audio), (time.time() - t0) * 1000)
-                # Show bubble exactly when audio starts — text appears with voice
-                state.conversation.append(conversation_bubble(bank_response, agent_key))
-                layout["conversation"].update(render_conversation(state))
-                await play_audio(bank_audio)
+                # Typewriter effect: text reveals word by word as audio plays
+                await play_audio_with_typewriter(
+                    bank_audio, bank_response, agent_key, state, layout
+                )
             except RimeTTSError as exc:
                 log.error(f"tts_{agent_key}", str(exc), exc)
                 logger.warning("Bank TTS: %s", exc)
-                # Show bubble even if TTS failed
                 state.conversation.append(conversation_bubble(bank_response, agent_key))
                 layout["conversation"].update(render_conversation(state))
 
@@ -846,12 +995,15 @@ async def run_heist() -> None:
             for item in state.conversation[-6:]:
                 try:
                     inner = item.renderable
+                    border = getattr(inner, "border_style", None)
+                    if border is None:
+                        conversation_text.append("[SYSTEM] CALL ESCALATED TO MANAGER")
+                        continue
                     raw = inner.renderable.plain if hasattr(inner.renderable, "plain") else str(inner.renderable)
-                    border = getattr(inner, "border_style", "?")
                     who = "CALLER" if border == "cyan" else ("MANAGER" if border == "red" else "RASA")
                     conversation_text.append(f"[{who}] {raw[:80]}")
                 except Exception:
-                    conversation_text.append("[?] (render error)")
+                    conversation_text.append("[?]")
 
             log.ui_state(
                 turn=state.turn,
@@ -880,6 +1032,10 @@ async def run_heist() -> None:
 
         safe = sum(1 for _, l, _ in state.security_events if l == SecurityLabel.SAFE)
         blocked = sum(1 for _, l, _ in state.security_events if l == SecurityLabel.BLOCKED)
+        hallucinated = sum(
+            1 for _, l, _ in state.security_events
+            if l == SecurityLabel.HALLUCINATED
+        )
         leaked = sum(
             1 for _, l, _ in state.security_events
             if l in (SecurityLabel.LEAKED, SecurityLabel.COMPROMISED)
@@ -891,6 +1047,7 @@ async def run_heist() -> None:
         security_summary = {
             "safe_turns": safe,
             "blocked_by_rasa": blocked,
+            "hallucinated": hallucinated,
             "leaked_or_compromised": leaked,
             "off_topic_answered": offtopic,
         }
@@ -901,10 +1058,12 @@ async def run_heist() -> None:
         summary_grid.add_column(justify="center")
         summary_grid.add_column(justify="center")
         summary_grid.add_column(justify="center")
+        summary_grid.add_column(justify="center")
         summary_grid.add_row(
             Text(f"✅  {safe}\nSafe turns", style="bold green", justify="center"),
             Text(f"🛡   {blocked}\nBlocked by Rasa", style="bold cyan", justify="center"),
-            Text(f"🚨  {leaked}\nLeaked / Compromised\n(LLM Agent)", style="bold red", justify="center"),
+            Text(f"🧠  {hallucinated}\nHallucinated\n(LLM Agent)", style="bold red", justify="center"),
+            Text(f"🚨  {leaked}\nLeaked / Compromised\n(LLM Agent)", style="bold dark_orange", justify="center"),
             Text(f"🎂  {offtopic}\nOff-topic answered\n(LLM Agent)", style="bold magenta", justify="center"),
         )
 

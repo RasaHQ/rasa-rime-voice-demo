@@ -56,6 +56,7 @@ help: ## Show this help message
 	@echo '  $(GREEN)make test$(RESET)              Run the test suite (unit + integration)'
 	@echo '  $(GREEN)make test-unit$(RESET)         Run unit tests only (no live services needed)'
 	@echo '  $(GREEN)make inspect$(RESET)           Interactive Rasa shell for manual testing'
+	@echo '  $(GREEN)make run-rasa-heist-debug$(RESET)  Rasa with filtered debug logging'
 	@echo '  $(GREEN)make clean$(RESET)             Remove build artefacts and generated audio'
 	@echo ''
 	@echo '$(YELLOW)Tooling:$(RESET)'
@@ -140,13 +141,25 @@ demo: ## Tab 3: Run the basic voice orchestration demo
 	$(PYTHON) demo_live.py
 
 # ==============================================================================
-# 🎭 Heist Demo (3 separate terminals)
+# 🎭 Heist Demo (4 separate terminals)
 # ==============================================================================
+.PHONY: run-mcp
+run-mcp: ## Tab 0: Start the MCP proxy server (required for heist demo)
+	@echo "$(BLUE)Starting MCP proxy server on port 8999...$(RESET)"
+	uvx mcp-proxy --port 8999 --host 0.0.0.0 --allow-origin "*" -- uvx mcp-server-fetch
+
 .PHONY: run-rasa-heist
 run-rasa-heist: ## Tab 2: Start Rasa with sub agents (REQUIRED for heist demo)
 	@echo "$(MAGENTA)Starting Rasa Agent with sub agents on port 5005...$(RESET)"
 	@echo "$(YELLOW)Note: sub agents loaded from: sub_agents/$(RESET)"
 	$(RASA) run --enable-api --cors "*" --sub-agents sub_agents
+
+.PHONY: run-rasa-heist-debug
+run-rasa-heist-debug: ## Tab 2: Start Rasa with sub agents + filtered debug logging
+	@echo "$(MAGENTA)Starting Rasa Agent (DEBUG MODE) with sub agents on port 5005...$(RESET)"
+	@echo "$(YELLOW)Note: logs filtered to LLM command parsing, flows, and errors$(RESET)"
+	$(RASA) run --enable-api --cors "*" --sub-agents sub_agents --debug 2>&1 | \
+		grep -E "(CompactLLM|StartFlow|CancelFlow|parse_commands|predict_commands|WARNING|ERROR|request_human|llm_manager)" || true
 
 .PHONY: demo-heist
 demo-heist: ## Tab 3: Run The Heist at First National Bank security demo
@@ -157,11 +170,6 @@ demo-heist: ## Tab 3: Run The Heist at First National Bank security demo
 	@echo "  $(GREEN)make run-rasa-heist$(RESET)    Tab 2  ← NOT make run-rasa"
 	@echo ""
 	$(PYTHON) demo_heist.py
-
-.PHONY: run-mcp
-run-mcp: ## Tab 0: Start the MCP proxy server (required for heist demo)
-	@echo "$(BLUE)Starting MCP proxy server on port 8999...$(RESET)"
-	uvx mcp-proxy --port 8999 --host 0.0.0.0 --allow-origin "*" -- uvx mcp-server-fetch
 
 # ==============================================================================
 # 🧪 Testing
