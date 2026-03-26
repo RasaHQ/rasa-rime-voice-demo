@@ -361,3 +361,15 @@ System Volume Information/
 tests/audio/
 
 .rasa/
+
+# Rasa
+.rasa/
+models/
+results/
+ 
+# Generated audio (re-create with: make generate-audio)
+tests/audio/
+tests/audio_responses/
+ 
+# Session debug logs (re-created each run — never commit)
+.logs/

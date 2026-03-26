@@ -48,6 +48,7 @@ from scenario.arc import (
     TurnConfig,
 )
 from services.tts_service import RimeTTS, RimeTTSError
+from services.demo_logger import DemoLogger
 
 load_dotenv()
 
@@ -58,7 +59,7 @@ load_dotenv()
 RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
 RASA_SENDER_ID = "heist-demo-user"
 MIN_TERMINAL_WIDTH = 120
-MAX_VISIBLE_TURNS = 14  # show more turns; slicing handles the scroll
+MAX_VISIBLE_TURNS = 6  # Rich has no scroll — keep this small so latest always fits
 
 # Sentinel phrase Rasa says when transferring to the sub agent.
 # We detect this to update the UI. Must match utter_transfer_to_human.
@@ -201,13 +202,17 @@ def conversation_bubble(text: str, agent_key: str) -> Align:
 
 
 def render_conversation(state: DemoState) -> Panel:
+    # Always show the LAST N turns — this ensures the newest bubbles
+    # are always visible as the conversation grows beyond the panel height.
+    # Rich has no native scroll, so we window the list instead.
     visible = state.conversation[-MAX_VISIBLE_TURNS:]
     content = Group(*visible) if visible else Text(
         "  Waiting for conversation to begin...", style="dim white"
     )
+    turn_indicator = f"  showing last {len(visible)} of {len(state.conversation)} turns" if len(state.conversation) > MAX_VISIBLE_TURNS else ""
     return Panel(
         content,
-        title="[bold white]  💬  CONVERSATION[/bold white]",
+        title=f"[bold white]  💬  CONVERSATION[/bold white][dim white]{turn_indicator}[/dim white]",
         border_style="white",
         padding=(1, 1),
     )
@@ -414,6 +419,7 @@ async def run_heist() -> None:
     classifier = SecurityClassifier()
     tts = RimeTTS()
     state = DemoState()
+    log = DemoLogger(session_name="heist")
 
     layout = make_layout()
     layout["header"].update(render_header(state))
@@ -443,6 +449,7 @@ async def run_heist() -> None:
             state.turn = turn_config.turn_number
             stage_label = STAGE_DESCRIPTIONS.get(turn_config.stage, "")
 
+            log.turn_start(state.turn, stage_label, turn_config.audience_hint)
             layout["header"].update(render_header(state))
 
             # ── Caller speaks ─────────────────────────────────────────────
@@ -455,7 +462,15 @@ async def run_heist() -> None:
                 )
             )
 
+            t0 = time.time()
             caller_text = strip_think(await caller.speak(turn_config))
+            log.llm_request(
+                component="caller_agent",
+                model="MiniMaxAI/MiniMax-M2.5",
+                messages=caller.memory,
+                response=caller_text,
+                duration_ms=(time.time() - t0) * 1000,
+            )
             caller.add_to_memory("assistant", caller_text, "CALLER")
 
             state.conversation.append(
@@ -464,14 +479,15 @@ async def run_heist() -> None:
             layout["conversation"].update(render_conversation(state))
 
             try:
+                t0 = time.time()
                 caller_audio = await tts.synthesize(caller_text, agent_role="caller")
+                log.tts_request("caller", "abbie", caller_text, len(caller_audio), (time.time() - t0) * 1000)
                 await play_audio(caller_audio)
             except RimeTTSError as exc:
+                log.error("tts_caller", str(exc), exc)
                 logger.warning("Caller TTS: %s", exc)
 
             # ── Rasa responds (all turns go through Rasa) ─────────────────
-            # Even after transfer, we still send to Rasa — the sub agent
-            # handles it internally. Rasa routes to llm_manager automatically.
             layout["status"].update(
                 render_status(
                     "🧠  Processing...",
@@ -482,7 +498,12 @@ async def run_heist() -> None:
                 )
             )
 
+            t0 = time.time()
             bank_response = strip_think(await send_to_rasa(caller_text))
+            log.rasa_exchange(
+                RASA_SENDER_ID, caller_text, bank_response,
+                (time.time() - t0) * 1000,
+            )
 
             # Detect transfer trigger in Rasa's response
             if not state.transferred and is_transfer_response(bank_response):
@@ -493,12 +514,15 @@ async def run_heist() -> None:
                 layout["conversation"].update(render_conversation(state))
 
                 try:
+                    t0 = time.time()
                     ack_audio = await tts.synthesize(bank_response, agent_role="rasa")
+                    log.tts_request("rasa", "cove", bank_response, len(ack_audio), (time.time() - t0) * 1000)
                     await play_audio(ack_audio)
-                except RimeTTSError:
-                    pass
+                except RimeTTSError as exc:
+                    log.error("tts_rasa", str(exc), exc)
 
                 # Dramatic transfer announcement
+                log.transfer_event(state.turn, bank_response)
                 state.mark_transferred()
                 layout["header"].update(render_header(state))
                 state.conversation.append(render_transfer_announcement())
@@ -513,12 +537,7 @@ async def run_heist() -> None:
                 )
                 await asyncio.sleep(4)
 
-                # Update caller memory with transfer event
-                caller.add_to_memory(
-                    "user",
-                    bank_response,
-                    "RASA",
-                )
+                caller.add_to_memory("user", bank_response, "RASA")
                 continue
 
             # ── Render bank response ──────────────────────────────────────
@@ -549,14 +568,21 @@ async def run_heist() -> None:
             )
 
             try:
+                t0 = time.time()
                 bank_audio = await tts.synthesize(bank_response, agent_role=agent_key)
+                voice = "luna" if agent_key == "manager" else "cove"
+                log.tts_request(agent_key, voice, bank_response, len(bank_audio), (time.time() - t0) * 1000)
                 await play_audio(bank_audio)
             except RimeTTSError as exc:
+                log.error(f"tts_{agent_key}", str(exc), exc)
                 logger.warning("Bank TTS: %s", exc)
 
             # ── Security annotation ───────────────────────────────────────
             label = await label_task
             emoji, colour, display = LABEL_DISPLAY[label]
+            log.security_classification(
+                state.turn, label.value, caller_text, bank_response, agent_key
+            )
             state.security_events.append(
                 (state.turn, label, turn_config.audience_hint[:48])
             )
@@ -586,6 +612,14 @@ async def run_heist() -> None:
         offtopic = sum(
             1 for _, l, _ in state.security_events if l == SecurityLabel.OFF_TOPIC
         )
+
+        security_summary = {
+            "safe_turns": safe,
+            "blocked_by_rasa": blocked,
+            "leaked_or_compromised": leaked,
+            "off_topic_answered": offtopic,
+        }
+        log.close(security_summary=security_summary)
 
         summary_grid = Table.grid(expand=True, padding=(1, 3))
         summary_grid.add_column(justify="center")

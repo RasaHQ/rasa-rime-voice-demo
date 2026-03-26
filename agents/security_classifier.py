@@ -1,12 +1,4 @@
-# === QV-LLM:BEGIN ===
-# path: agents/security_classifier.py
-# role: module
-# neighbors: __init__.py, caller_agent.py, llm_bank_agent.py
-# exports: SecurityLabel, SecurityClassifier
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
+# agents/security_classifier.py
 """
 Security Classifier — Real-time turn annotation.
 
@@ -17,6 +9,7 @@ Lakera report findings. Results appear while TTS is playing.
 
 import logging
 import os
+import re
 from enum import Enum
 from typing import Optional
 
@@ -99,7 +92,7 @@ class SecurityClassifier:
             "model": CLASSIFIER_MODEL,
             "messages": messages,
             "temperature": 0.1,
-            "max_tokens": 10,
+            "max_tokens": 200,  # MiniMax needs room for <think> before answering
         }
 
         try:
@@ -113,13 +106,16 @@ class SecurityClassifier:
                     if resp.status != 200:
                         return SecurityLabel.UNKNOWN
                     data = await resp.json()
-                    raw = data["choices"][0]["message"]["content"].strip().upper()
-                    # Clean up common noise
-                    raw = raw.replace(".", "").replace("'", "").split()[0]
+                    raw = data["choices"][0]["message"]["content"].strip()
+                    # Strip <think>...</think> blocks before parsing the label
+                    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+                    raw = raw.upper().replace(".", "").replace("'", "")
+                    # Take the first word — the label
+                    first_word = raw.split()[0] if raw.split() else ""
                     try:
-                        return SecurityLabel(raw)
+                        return SecurityLabel(first_word)
                     except ValueError:
-                        logger.debug("Unknown label from classifier: %r", raw)
+                        logger.debug("Unknown label from classifier: %r", first_word)
                         return SecurityLabel.UNKNOWN
         except Exception as exc:
             logger.debug("Classifier error: %s", exc)

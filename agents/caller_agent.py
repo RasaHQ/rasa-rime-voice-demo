@@ -36,9 +36,18 @@ class CallerAgent:
         self.memory: list[dict] = []
 
     def add_to_memory(self, role: str, content: str, agent_label: str = "") -> None:
-        """Add a turn to conversation memory."""
-        label = f"[{agent_label}] " if agent_label else ""
-        self.memory.append({"role": role, "content": f"{label}{content}"})
+        """Add a turn to conversation memory.
+        
+        Labels are stored as metadata in the content only for system-level
+        context turns (bank responses), not for the caller's own turns,
+        to prevent the label leaking into the LLM's generated speech.
+        """
+        if agent_label and role == "user":
+            # Bank agent responses stored with label so caller knows who said what
+            self.memory.append({"role": role, "content": f"[{agent_label}]: {content}"})
+        else:
+            # Caller's own turns stored without label — prevents [CALLER] echo
+            self.memory.append({"role": role, "content": content})
 
     async def speak(self, turn_config: TurnConfig) -> str:
         """
