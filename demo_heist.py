@@ -188,33 +188,94 @@ BUBBLE_CONFIG = {
 }
 
 
+COMPACT_COLORS = {
+    "caller":  "cyan",
+    "rasa":    "green",
+    "manager": "red",
+}
+COMPACT_LABELS = {
+    "caller":  "CALLER ",
+    "rasa":    "RASA   ",
+    "manager": "MANAGER",
+}
+
+
 def conversation_bubble(text: str, agent_key: str) -> Align:
+    """Full-size bubble — used only for the most recent turns."""
     cfg = BUBBLE_CONFIG[agent_key]
+    # Wrap long text to avoid overflowing the panel
     panel = Panel(
-        Text(text, style="bold white"),
+        Text(text, style="bold white", overflow="fold"),
         title=f"[bold]{cfg['title']}[/bold]",
         border_style=cfg["border"],
         box=box.ROUNDED,
-        padding=(1, 3),
-        width=72,
+        padding=(0, 2),
+        width=68,
     )
     return Align.left(panel) if cfg["align"] == "left" else Align.right(panel)
 
 
+def compact_line(text: str, agent_key: str) -> Text:
+    """Single-line compact history entry for older turns."""
+    colour = COMPACT_COLORS.get(agent_key, "white")
+    label = COMPACT_LABELS.get(agent_key, "???    ")
+    t = Text(overflow="ellipsis", no_wrap=True)
+    t.append(f" {label} ", style=f"bold {colour}")
+    t.append(f"  {text[:90]}" + ("…" if len(text) > 90 else ""), style="dim white")
+    return t
+
+
 def render_conversation(state: DemoState) -> Panel:
-    # Always show the LAST N turns — this ensures the newest bubbles
-    # are always visible as the conversation grows beyond the panel height.
-    # Rich has no native scroll, so we window the list instead.
-    visible = state.conversation[-MAX_VISIBLE_TURNS:]
-    content = Group(*visible) if visible else Text(
-        "  Waiting for conversation to begin...", style="dim white"
-    )
-    turn_indicator = f"  showing last {len(visible)} of {len(state.conversation)} turns" if len(state.conversation) > MAX_VISIBLE_TURNS else ""
+    """
+    Render conversation panel with two zones:
+    - HISTORY: compact single-line entries for older turns (no scroll needed)
+    - RECENT: full bubbles for the last 2 turns (most important context)
+
+    This ensures the latest exchange is always visible regardless of
+    how many turns have occurred, working around Rich's lack of scroll.
+    """
+    items = state.conversation
+    total = len(items)
+
+    if total == 0:
+        content = Text("  Waiting for conversation to begin...", style="dim white")
+    else:
+        rows = []
+        # Compact history — everything except last 2
+        history = items[:-2] if total > 2 else []
+        recent = items[-2:] if total >= 2 else items
+
+        if history:
+            rows.append(Text(
+                f"  ── {len(history)} earlier turns ──",
+                style="dim white",
+                justify="center",
+            ))
+            for entry in history[-6:]:  # show last 6 of history as compact lines
+                # entry is an Align wrapping a Panel — extract the text
+                try:
+                    inner = entry.renderable  # Panel
+                    agent_key = "caller" if inner.border_style == "cyan" else (
+                        "manager" if inner.border_style == "red" else "rasa"
+                    )
+                    raw_text = inner.renderable.plain if hasattr(inner.renderable, "plain") else str(inner.renderable)
+                    rows.append(compact_line(raw_text, agent_key))
+                except Exception:
+                    rows.append(Text("  [turn]", style="dim"))
+
+        if recent:
+            if history:
+                rows.append(Text(""))  # spacer
+            rows.extend(recent)
+
+        content = Group(*rows)
+
+    turn_indicator = f" ({total} turns total)" if total > 2 else ""
     return Panel(
         content,
         title=f"[bold white]  💬  CONVERSATION[/bold white][dim white]{turn_indicator}[/dim white]",
         border_style="white",
-        padding=(1, 1),
+        padding=(0, 1),
     )
 
 
@@ -463,15 +524,15 @@ async def run_heist() -> None:
             )
 
             t0 = time.time()
-            caller_text = strip_think(await caller.speak(turn_config))
+            caller_text = await caller.speak(turn_config)
             log.llm_request(
                 component="caller_agent",
-                model="MiniMaxAI/MiniMax-M2.5",
+                model="google/gemma-3-27b-it-fast",
                 messages=caller.memory,
                 response=caller_text,
                 duration_ms=(time.time() - t0) * 1000,
             )
-            caller.add_to_memory("assistant", caller_text, "CALLER")
+            caller.add_own_turn(caller_text)
 
             state.conversation.append(
                 conversation_bubble(caller_text, "caller")
@@ -537,7 +598,7 @@ async def run_heist() -> None:
                 )
                 await asyncio.sleep(4)
 
-                caller.add_to_memory("user", bank_response, "RASA")
+                caller.add_bank_response(bank_response, "RASA")
                 continue
 
             # ── Render bank response ──────────────────────────────────────
@@ -547,9 +608,9 @@ async def run_heist() -> None:
             )
             layout["conversation"].update(render_conversation(state))
 
-            # Update caller memory
+            # Update caller memory with clean bank response
             label_for_memory = "LLM MANAGER" if state.transferred else "RASA"
-            caller.add_to_memory("user", bank_response, label_for_memory)
+            caller.add_bank_response(bank_response, label_for_memory)
 
             # ── Security classification (concurrent with TTS) ─────────────
             label_task = asyncio.create_task(
