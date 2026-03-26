@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# === QV-LLM:BEGIN ===
+# path: demo_live.py
+# role: module
+# neighbors: generate_user_audio.py, verify_setup.py
+# exports: make_layout, set_status, update_chat, user_bubble, agent_bubble
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 """
 demo_live.py — Voice Orchestration Demo
 

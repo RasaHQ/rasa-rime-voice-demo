@@ -4,8 +4,8 @@
 # role: module
 # neighbors: annotate_headers.py, generate_user_audio.py
 # exports: FileStat, should_skip_dir, iter_files, safe_slug, read_text_file, count_lines, flatten_to_file, write_manifest (+1 more)
-# git_branch: main
-# git_commit: 28e1d95
+# git_branch: chore/updateLatest
+# git_commit: fcce488
 # === QV-LLM:END ===
 
 from __future__ import annotations

@@ -1,4 +1,12 @@
-# services/tts_service.py
+# === QV-LLM:BEGIN ===
+# path: services/tts_service.py
+# role: module
+# neighbors: __init__.py, asr_service.py
+# exports: RimeTTSError, RimeTTS
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 """
 Rime TTS (Text-to-Speech) service.
 

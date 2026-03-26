@@ -1,3 +1,12 @@
+# === QV-LLM:BEGIN ===
+# path: actions/actions.py
+# role: module
+# neighbors: __init__.py
+# exports: ActionGetAccountBalance, ActionGetAccounts, ActionProcessTransfer, ActionBlockCard, ActionGetTransactions
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 from typing import Any, Text, Dict, List
 from rasa_sdk import Action, Tracker
 from rasa_sdk.executor import CollectingDispatcher

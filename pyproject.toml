@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: pyproject.toml
+# role: module
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 # pyproject.toml
 [project]
 name = "rasa-rime-voice-demo"

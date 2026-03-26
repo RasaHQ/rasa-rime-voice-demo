@@ -357,3 +357,5 @@ System Volume Information/
 
 /quack-core/output/
 /quack-core/path/
+
+tests/audio/

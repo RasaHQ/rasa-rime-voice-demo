@@ -1,4 +1,12 @@
-# tests/test_flows.py
+# === QV-LLM:BEGIN ===
+# path: tests/test_flows.py
+# role: module
+# neighbors: __init__.py, test_voice_full_pipeline.py, test_voice_production.py
+# exports: TestDeepgramASR, TestRimeTTS, TestConversationFlows, sample_audio_path, asr_client, tts_client
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 """
 Automated tests for the voice banking demo.
 

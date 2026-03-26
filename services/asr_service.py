@@ -1,4 +1,12 @@
-# services/asr_service.py
+# === QV-LLM:BEGIN ===
+# path: services/asr_service.py
+# role: module
+# neighbors: __init__.py, tts_service.py
+# exports: DeepgramASRError, DeepgramASR
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 """
 Deepgram ASR (Automatic Speech Recognition) service.
 

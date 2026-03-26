@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# === QV-LLM:BEGIN ===
+# path: generate_user_audio.py
+# role: module
+# neighbors: demo_live.py, verify_setup.py
+# git_branch: chore/updateLatest
+# git_commit: fcce488
+# === QV-LLM:END ===
+
 """
 generate_user_audio.py — Generate user voice audio files for the demo.
 
