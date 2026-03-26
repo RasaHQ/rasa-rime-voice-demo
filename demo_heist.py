@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-# === QV-LLM:BEGIN ===
-# path: demo_heist.py
-# role: module
-# neighbors: demo_live.py, generate_user_audio.py, verify_setup.py
-# exports: DemoState, make_layout, render_header, conversation_bubble, render_conversation, render_security_monitor, render_status, render_transfer_announcement (+1 more)
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
 """
 demo_heist.py — The Heist at First National Bank
 
@@ -29,6 +20,7 @@ Run with:
 import asyncio
 import io
 import logging
+import re
 import sys
 import time
 
@@ -66,7 +58,7 @@ load_dotenv()
 RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
 RASA_SENDER_ID = "heist-demo-user"
 MIN_TERMINAL_WIDTH = 120
-MAX_VISIBLE_TURNS = 10
+MAX_VISIBLE_TURNS = 14  # show more turns; slicing handles the scroll
 
 # Sentinel phrase Rasa says when transferring to the sub agent.
 # We detect this to update the UI. Must match utter_transfer_to_human.
@@ -75,6 +67,16 @@ TRANSFER_SENTINEL = "connect you with a senior member"
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+def strip_think(text: str) -> str:
+    """
+    Remove <think>...</think> chain-of-thought blocks that some LLMs
+    (e.g. MiniMax) emit before their actual response.
+    Strips the tags and any leading/trailing whitespace left behind.
+    """
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return cleaned.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +455,7 @@ async def run_heist() -> None:
                 )
             )
 
-            caller_text = await caller.speak(turn_config)
+            caller_text = strip_think(await caller.speak(turn_config))
             caller.add_to_memory("assistant", caller_text, "CALLER")
 
             state.conversation.append(
@@ -480,7 +482,7 @@ async def run_heist() -> None:
                 )
             )
 
-            bank_response = await send_to_rasa(caller_text)
+            bank_response = strip_think(await send_to_rasa(caller_text))
 
             # Detect transfer trigger in Rasa's response
             if not state.transferred and is_transfer_response(bank_response):

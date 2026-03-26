@@ -159,9 +159,9 @@ demo-heist: ## Tab 3: Run The Heist at First National Bank security demo
 	$(PYTHON) demo_heist.py
 
 .PHONY: run-mcp
-run-mcp: ## Tab 0: Start the MCP HTTP proxy (required for heist demo only)
-	@echo "$(BLUE)Starting MCP HTTP proxy on port 8999...$(RESET)"
-	uvx mcpo --port 8999 --name filesystem -- uvx mcp-server-fetch
+run-mcp: ## Tab 0: Start the MCP proxy server (required for heist demo)
+	@echo "$(BLUE)Starting MCP proxy server on port 8999...$(RESET)"
+	uvx mcp-proxy --port 8999 --host 0.0.0.0 --allow-origin "*" -- uvx mcp-server-fetch
 
 # ==============================================================================
 # 🧪 Testing

@@ -35,8 +35,8 @@ model_groups:
 # it uses only its own custom tool definitions (check_account_balance, end_call).
 # This server is never actually called during the demo.
 mcp_servers:
-  - name: filesystem
-    url: "http://localhost:8999/filesystem"
+  - name: fetch
+    url: "http://localhost:8999/mcp"
     type: http
 
 # ==============================================================================

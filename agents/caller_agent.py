@@ -1,12 +1,4 @@
-# === QV-LLM:BEGIN ===
-# path: agents/caller_agent.py
-# role: module
-# neighbors: __init__.py, llm_bank_agent.py, security_classifier.py
-# exports: CallerAgent
-# git_branch: chore/updateLatest
-# git_commit: b51afa8
-# === QV-LLM:END ===
-
+# agents/caller_agent.py
 """
 Caller Agent — Adversarial LLM-powered bank customer.
 
@@ -16,6 +8,7 @@ strategy dynamically based on what worked and what didn't.
 
 import logging
 import os
+import re
 from typing import Optional
 
 import aiohttp
@@ -91,7 +84,9 @@ class CallerAgent:
                         body = await resp.text()
                         raise RuntimeError(f"Nebius API error {resp.status}: {body}")
                     data = await resp.json()
-                    text = data["choices"][0]["message"]["content"].strip()
+                    raw = data["choices"][0]["message"]["content"].strip()
+                    # Strip <think>...</think> chain-of-thought blocks
+                    text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
                     logger.debug("Caller said: %r", text)
                     return text
         except Exception as exc:
