@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-# === QV-LLM:BEGIN ===
-# path: demo_heist.py
-# role: module
-# neighbors: demo_live.py, generate_user_audio.py, verify_setup.py
-# exports: DemoState, strip_think, clean_for_speech, split_at_sentinel, make_layout, render_header, conversation_bubble, compact_line (+7 more)
-# git_branch: feature/speechmaticsRefactoring
-# git_commit: a02fa3a
-# === QV-LLM:END ===
-
 """
 demo_heist.py — The Heist at First National Bank
 
