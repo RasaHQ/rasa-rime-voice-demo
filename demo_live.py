@@ -5,7 +5,7 @@
 # neighbors: demo_heist.py, generate_user_audio.py, verify_setup.py
 # exports: make_layout, set_status, update_chat, user_bubble, agent_bubble
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 6511069
+# git_commit: 35cd8c9
 # === QV-LLM:END ===
 
 """

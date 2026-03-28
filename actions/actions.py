@@ -4,7 +4,7 @@
 # neighbors: __init__.py
 # exports: ActionGetAccountBalance, ActionGetAccounts, ActionProcessTransfer, ActionBlockCard, ActionGetTransactions
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 6511069
+# git_commit: 35cd8c9
 # === QV-LLM:END ===
 
 from typing import Any, Text, Dict, List

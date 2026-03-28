@@ -4,7 +4,7 @@
 # neighbors: __init__.py, caller_agent.py, custom_command_generator.py
 # exports: SecurityLabel, SecurityClassifier
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 6511069
+# git_commit: 35cd8c9
 # === QV-LLM:END ===
 
 """

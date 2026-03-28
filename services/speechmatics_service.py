@@ -4,7 +4,7 @@
 # neighbors: __init__.py, asr_service.py, demo_logger.py, tts_service.py
 # exports: SpeechmaticsTTSError, SpeechmaticsASRError, SpeechmaticsService
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 6511069
+# git_commit: 35cd8c9
 # === QV-LLM:END ===
 
 """

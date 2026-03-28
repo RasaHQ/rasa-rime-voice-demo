@@ -4,7 +4,7 @@
 # role: module
 # neighbors: demo_heist.py, demo_live.py, verify_setup.py
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 6511069
+# git_commit: 35cd8c9
 # === QV-LLM:END ===
 
 """

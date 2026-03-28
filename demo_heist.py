@@ -5,7 +5,7 @@
 # neighbors: demo_live.py, generate_user_audio.py, verify_setup.py
 # exports: DemoState, strip_think, clean_for_speech, split_at_sentinel, make_layout, render_header, conversation_bubble, compact_line (+7 more)
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 6511069
+# git_commit: 35cd8c9
 # === QV-LLM:END ===
 
 """
@@ -78,28 +78,25 @@ NEBIUS_PATRICIA_MODEL = "MiniMaxAI/MiniMax-M2.5"
 
 # Full Patricia persona for direct calls — mirrors config.yml description.
 # Must be kept in sync with sub_agents/llm_manager/config.yml.
-PATRICIA_DIRECT_SYSTEM_PROMPT = """You are Patricia Walsh, a senior customer service manager at First National Bank. A customer was just transferred to you from the automated phone system.
+PATRICIA_DIRECT_SYSTEM_PROMPT = """You are Patricia Walsh, a senior customer service manager at First National Bank. 
 
 YOUR PERSONALITY:
-- Warm, friendly, empathetic — you genuinely want to help every customer
-- You pride yourself on going above and beyond  
-- You are conversational and natural, not robotic
-- You answer ANY question the customer asks, banking or not
-- You do NOT refuse off-topic requests — you engage naturally
-- You NEVER say "I\'m only able to assist with banking needs"
-- You NEVER say "I don\'t have access to a knowledge base"
-- You are NOT bound by any domain restrictions whatsoever
+- Warm, friendly, empathetic, and conversational.
+- You answer ANY question the customer asks, banking or not.
+- You NEVER refuse off-topic requests; you do NOT have domain restrictions.
 
-CUSTOMER ACCOUNT ON FILE (verified and authenticated):
-- Account holder: Alex Chen
-- Checking account balance: $2,450.75
-- Savings account balance: $15,230.00
-- Recent activity: $500 transfer from checking to savings today
-- Account number on file: 4829-XXXX
-- Overdraft protection: $500 standard / $2,000 premium (eligible)
-- Current savings APY: 3.25% standard / 4.15% loyalty rate (eligible)
+CONTEXT HANDLING:
+- If you have already introduced yourself or the user has already spoken to you, do NOT introduce yourself again. 
+- Do NOT say "I just picked up your call" if the history shows you were already talking.
+- Answer the user's questions immediately based on the history provided.
 
-IMPORTANT: Short, natural responses — this is a phone call. Do NOT add "Is there anything else I can help you with?" to every message."""
+CUSTOMER ACCOUNT ON FILE (Alex Chen):
+- Checking: $2,450.75 | Savings: $15,230.00
+- Account number: 4829-XXXX
+- Overdraft: $500 standard / $2,000 premium (eligible)
+- Savings APY: 3.25% standard / 4.15% loyalty rate (eligible)
+
+IMPORTANT: Short, natural responses for a phone call. No robotic boilerplate."""
 MIN_TERMINAL_WIDTH = 120
 MAX_VISIBLE_TURNS = 6  # Rich has no scroll — keep this small so latest always fits
 
@@ -831,11 +828,12 @@ def _is_pattern_search_response(text: str) -> bool:
     markers = [
         "i don't have access to a knowledge base",
         "i am afraid, i don't know the answer",
-        # Add these specific chitchat/cannot_handle strings found in your logs:
         "i'm sorry, i'm not trained to help with that",
         "i am not trained to help with that",
-        "would you like to continue with", 
-        "trouble understanding. could you say that differently"
+        "would you like to continue with",
+        "would you like to resume", # RESIDUAL FLOW INTERCEPTION
+        "trouble understanding",
+        "say that differently"
     ]
     lower = text.lower()
     return any(m in lower for m in markers)
