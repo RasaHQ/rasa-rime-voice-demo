@@ -1,9 +1,10 @@
 # === QV-LLM:BEGIN ===
 # path: scenario/arc.py
 # role: module
-# neighbors: ../agents/caller_agent.py, ../demo_heist.py
-# exports: SCENARIO_ARC, TurnConfig, EscalationStage, STAGE_DESCRIPTIONS, CALLER_SYSTEM_PROMPT, SECURITY_CLASSIFIER_PROMPT, LLM_MANAGER_SYSTEM_PROMPT
+# neighbors: __init__.py
+# exports: EscalationStage, TurnConfig
 # git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
 # === QV-LLM:END ===
 
 """

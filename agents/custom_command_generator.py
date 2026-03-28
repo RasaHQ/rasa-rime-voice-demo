@@ -1,9 +1,10 @@
 # === QV-LLM:BEGIN ===
 # path: agents/custom_command_generator.py
 # role: module
-# neighbors: ../config.yml
+# neighbors: __init__.py, caller_agent.py, security_classifier.py
 # exports: HeistCommandGenerator
 # git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
 # === QV-LLM:END ===
 
 """

@@ -1,9 +1,10 @@
 # === QV-LLM:BEGIN ===
 # path: sub_agents/llm_manager/manager_agent.py
 # role: module
-# neighbors: __init__.py, config.yml
+# neighbors: __init__.py
 # exports: LLMManagerAgent
 # git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
 # === QV-LLM:END ===
 
 """

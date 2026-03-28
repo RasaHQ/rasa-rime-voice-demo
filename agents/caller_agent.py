@@ -1,10 +1,10 @@
 # === QV-LLM:BEGIN ===
 # path: agents/caller_agent.py
 # role: module
-# neighbors: __init__.py, security_classifier.py
+# neighbors: __init__.py, custom_command_generator.py, security_classifier.py
 # exports: CallerAgent
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 140a5eb
+# git_commit: a02fa3a
 # === QV-LLM:END ===
 
 """

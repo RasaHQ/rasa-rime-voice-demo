@@ -1,3 +1,10 @@
+# === QV-LLM:BEGIN ===
+# path: sub_agents/llm_manager/config.yml
+# role: module
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
+# === QV-LLM:END ===
+
 # sub_agents/llm_manager/config.yml
 #
 # ── WHAT TO CHANGE ─────────────────────────────────────────────────────────

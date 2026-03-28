@@ -3,5 +3,5 @@
 # role: module
 # neighbors: test_flows.py
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 140a5eb
+# git_commit: a02fa3a
 # === QV-LLM:END ===

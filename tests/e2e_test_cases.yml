@@ -2,7 +2,7 @@
 # path: tests/e2e_test_cases.yml
 # role: module
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: 140a5eb
+# git_commit: a02fa3a
 # === QV-LLM:END ===
 
 # tests/e2e_test_cases.yml

@@ -1,3 +1,12 @@
+# === QV-LLM:BEGIN ===
+# path: services/speechmatics_service.py
+# role: module
+# neighbors: __init__.py, asr_service.py, demo_logger.py, tts_service.py
+# exports: SpeechmaticsTTSError, SpeechmaticsASRError, SpeechmaticsService
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
+# === QV-LLM:END ===
+
 """
 services/speechmatics_service.py
 

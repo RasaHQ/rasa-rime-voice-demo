@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# === QV-LLM:BEGIN ===
+# path: demo_live.py
+# role: module
+# neighbors: demo_heist.py, generate_user_audio.py, verify_setup.py
+# exports: make_layout, set_status, update_chat, user_bubble, agent_bubble
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
+# === QV-LLM:END ===
+
 """
 demo_live.py — Voice Orchestration Demo (Speechmatics edition)
 

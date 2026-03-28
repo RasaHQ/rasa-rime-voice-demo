@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# === QV-LLM:BEGIN ===
+# path: verify_setup.py
+# role: module
+# neighbors: demo_heist.py, demo_live.py, generate_user_audio.py
+# exports: ok, warn, fail, section, hint, check_python_version, check_env_var, check_module (+3 more)
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
+# === QV-LLM:END ===
+
 """
 verify_setup.py — Pre-flight diagnostics for the voice demo.
 

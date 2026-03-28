@@ -1,3 +1,12 @@
+# === QV-LLM:BEGIN ===
+# path: tests/test_flows.py
+# role: module
+# neighbors: __init__.py
+# exports: TestSpeechmaticsTTS, TestSpeechmaticsASR, TestConversationFlows, sample_audio_path, svc
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
+# === QV-LLM:END ===
+
 """
 tests/test_flows.py
 

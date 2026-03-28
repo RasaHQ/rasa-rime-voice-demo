@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# === QV-LLM:BEGIN ===
+# path: generate_user_audio.py
+# role: module
+# neighbors: demo_heist.py, demo_live.py, verify_setup.py
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: a02fa3a
+# === QV-LLM:END ===
+
 """
 generate_user_audio.py — Generate user voice audio files for the demo.
 
