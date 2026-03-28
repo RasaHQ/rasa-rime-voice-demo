@@ -5,7 +5,7 @@
 # neighbors: demo_heist.py, demo_live.py, generate_user_audio.py
 # exports: ok, warn, fail, section, hint, check_python_version, check_env_var, check_module (+3 more)
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: a02fa3a
+# git_commit: 6511069
 # === QV-LLM:END ===
 
 """

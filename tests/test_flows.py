@@ -4,7 +4,7 @@
 # neighbors: __init__.py
 # exports: TestSpeechmaticsTTS, TestSpeechmaticsASR, TestConversationFlows, sample_audio_path, svc
 # git_branch: feature/speechmaticsRefactoring
-# git_commit: a02fa3a
+# git_commit: 6511069
 # === QV-LLM:END ===
 
 """

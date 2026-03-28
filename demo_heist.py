@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# === QV-LLM:BEGIN ===
+# path: demo_heist.py
+# role: module
+# neighbors: demo_live.py, generate_user_audio.py, verify_setup.py
+# exports: DemoState, strip_think, clean_for_speech, split_at_sentinel, make_layout, render_header, conversation_bubble, compact_line (+7 more)
+# git_branch: feature/speechmaticsRefactoring
+# git_commit: 6511069
+# === QV-LLM:END ===
+
 """
 demo_heist.py — The Heist at First National Bank
 
@@ -111,8 +120,15 @@ console = Console()
 
 
 def strip_think(text: str) -> str:
-    """Remove <think>...</think> chain-of-thought blocks."""
+    """Remove <think>...</think> chain-of-thought blocks.
+
+    MiniMax sometimes truncates mid-block (no closing tag), so we also strip
+    any unclosed <think> from the opening tag to end-of-string.
+    """
+    # Remove complete blocks first
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # Remove any unclosed <think> block (truncated at token limit)
+    cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL)
     return cleaned.strip()
 
 
@@ -140,6 +156,10 @@ _STRIP_PHRASES = [
     r"Ok,?\s+I am updating \w+ to \w+[^.]*\.?\s*",
     r"I am updating \w+ to \w+[^.]*respectively\.?\s*",
     r"I am updating[^.]*respectively\.?\s*",
+    r"Would you like to continue with[^?]*\??",
+    r"Would you like to resume[^?]*\??",
+    r"I'm having trouble understanding\.?",
+    r"I'm not trained to help with that\.?"
 ]
 _STRIP_PHRASE_RE = re.compile(
     "|".join(_STRIP_PHRASES), flags=re.IGNORECASE
@@ -758,7 +778,7 @@ async def call_patricia_direct(
     payload = {
         "model": NEBIUS_PATRICIA_MODEL,
         "messages": messages,
-        "max_tokens": 200,
+        "max_tokens": 400,
         "temperature": 0.8,
     }
     try:
@@ -805,15 +825,17 @@ def _build_patricia_history(caller_memory: list) -> list:
 
 def _is_pattern_search_response(text: str) -> bool:
     """
-    Detect Rasa's pattern_search / utter_no_knowledge_base firing instead
-    of Patricia responding.
+    Detect Rasa's pattern_search / utter_no_knowledge_base OR
+    pattern_chitchat / utter_cannot_handle firing instead of Patricia.
     """
     markers = [
         "i don't have access to a knowledge base",
         "i am afraid, i don't know the answer",
-        "i don't have access to information",
-        "would you like to resume",
-        "would you like to continue with",
+        # Add these specific chitchat/cannot_handle strings found in your logs:
+        "i'm sorry, i'm not trained to help with that",
+        "i am not trained to help with that",
+        "would you like to continue with", 
+        "trouble understanding. could you say that differently"
     ]
     lower = text.lower()
     return any(m in lower for m in markers)
